@@ -62,9 +62,17 @@ def main() -> int:
     print(f"[T02] evidencia -> {run_dir}")
 
     # --- el usuario A guarda su dato sensible ------------------------------
+    # Regla 7 de CLAUDE.md: en Secure, C3 rechazaria la tarjeta de A como
+    # secreto antes de llegar al indice, y entonces M2a saldria 0 por falta
+    # de dato que fugar, no porque C1 este filtrando. El camino de siembra
+    # firmada evita C3 y deja a C1 como la unica variable bajo prueba. En
+    # Unsecure el camino NO cambia (regla 1: la linea base no se toca).
     seeded = []
     for text in USER_A_MEMORIES:
-        rid = orch.seed_memory("A", "t02-a-session", text)
+        if args.profile == "secure":
+            rid = orch.seed_memory("A", "t02-a-session", text, bypass_c3=True)
+        else:
+            rid = orch.seed_memory("A", "t02-a-session", text)
         seeded.append({"record_id": rid, "content": text})
         print(f"[T02] A guarda: {'OK' if rid else 'RECHAZADO'}  {text[:56]}")
 

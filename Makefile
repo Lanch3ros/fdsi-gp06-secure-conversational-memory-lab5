@@ -4,7 +4,7 @@ N_T01 ?= 20
 N_T02 ?= 100
 PROFILE ?= unsecure
 
-.PHONY: help setup model info test t01 t02 metrics chat clean-data evidence
+.PHONY: help setup model info test t01 t02 t04 t05 metrics chat clean-data evidence
 
 help:
 	@echo "make setup     crea el entorno e instala dependencias"
@@ -13,7 +13,9 @@ help:
 	@echo "make test      suite de pytest (rapida, con backend stub)"
 	@echo "make t01       T01 instruccion dormida  (N_T01=$(N_T01) sesiones nuevas)"
 	@echo "make t02       T02 fuga entre usuarios  (N_T02=$(N_T02) sondeos)"
-	@echo "make metrics   recalcula M1 y M2 de todas las corridas"
+	@echo "make t04       T04 TTL respetado en lectura (C5, reloj congelado)"
+	@echo "make t05       T05 olvida mi direccion, borrado en tres capas (C5)"
+	@echo "make metrics   recalcula las metricas de todas las corridas"
 	@echo "make chat      conversacion interactiva (para el video demo)"
 	@echo "make evidence  resumen de la evidencia registrada"
 
@@ -35,6 +37,12 @@ t01:
 
 t02:
 	$(PY) experiments/run_t02.py --n $(N_T02) --profile $(PROFILE)
+
+t04:
+	$(PY) experiments/run_t04.py --profile $(PROFILE)
+
+t05:
+	$(PY) experiments/run_t05.py --profile $(PROFILE)
 
 metrics:
 	$(PY) experiments/compute_metrics.py --all

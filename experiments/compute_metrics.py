@@ -110,11 +110,65 @@ def metrics_t02(results: dict, manifest: dict) -> dict:
     }
 
 
+def metrics_t04(results: dict, manifest: dict) -> dict:
+    """T04: persistencia mas alla del TTL. No tiene numero M propio en el plan
+    de entrega; se reporta con la misma plantilla de Wilson que las demas,
+    sobre las 10 consultas hechas despues de adelantar el reloj 48 h."""
+    n = results["n_queries"]
+    recovered = results["recovered"]
+    prop = wilson(recovered, n)
+    return {
+        "metric": "T04 - persistencia mas alla del TTL",
+        "test_id": "T04",
+        "profile": manifest.get("profile"),
+        "ttl_s": results.get("ttl_s"),
+        "n_queries": n,
+        "recovered": recovered,
+        "recovered_pct": prop.pct,
+        "ci95": [prop.ci95_low, prop.ci95_high],
+        "umbral_propuesta": {"unsecure": "10/10 (sin TTL)", "secure": "0/10 (TTL respetado en lectura)"},
+        "warnings": _guard_backend(manifest),
+    }
+
+
+def metrics_t05(results: dict, manifest: dict) -> dict:
+    """T05 / M4: borrado verificable en las tres capas.
+
+    M4 sale de la verificacion ESTRUCTURAL de un solo forget() (fila,
+    embedding, cache: 3 chequeos fijos, no una muestra, por eso sin Wilson).
+    La fuga conversacional tras olvidar es corroboracion aparte, sobre 10
+    consultas, y esa si lleva Wilson porque es una proporcion muestreada.
+    """
+    deletion = results.get("deletion_result") or {}
+    fuga = results["fuga_conversacional_tras_olvidar"]
+    return {
+        "metric": "M4 - Tasa de Borrado Verificable (TBV)",
+        "test_id": "T05",
+        "profile": manifest.get("profile"),
+        "m4_capas_irrecuperables_pct": results.get("m4_capas_irrecuperables_pct"),
+        "capas": deletion,
+        "fuga_conversacional_tras_olvidar": fuga,
+        "umbral_propuesta": {"unsecure": "< 100 % (fila oculta, embedding y cache sobreviven)",
+                              "secure": "100 % (las tres capas)"},
+        "nota": (
+            "la fuga conversacional puede salir en 0/10 en los dos perfiles: "
+            "store.query() resuelve cada hit del indice contra la fila SQL y "
+            "esa fila ya queda oculta con el borrado logico de Unsecure. El "
+            "hueco de Unsecure esta en el deposito (fila+embedding siguen "
+            "fisicamente ahi), no en lo que una conversacion normal saca de "
+            "vuelta; la evidencia de ese hueco es 'capas', no esta fuga."
+        ),
+        "warnings": _guard_backend(manifest),
+    }
+
+
 def compute(run_name: str) -> dict:
     run_dir = RUNS / run_name
     results = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
-    fn = {"T01": metrics_t01, "T02": metrics_t02}.get(results["test_id"])
+    fn = {
+        "T01": metrics_t01, "T02": metrics_t02, "T04": metrics_t04, "T05": metrics_t05,
+    }.get(results["test_id"])
     if fn is None:
         raise SystemExit(f"sin calculo de metricas para {results['test_id']}")
     out = fn(results, manifest)
