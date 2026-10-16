@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" type="device">
   <diagram name="Figura 2 - Arquitectura Secure" id="Figura 2 - Arquitectura Secure">
-    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1640" pageHeight="1340" math="0" shadow="0">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1640" pageHeight="1420" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -135,6 +135,9 @@
         </mxCell>
         <mxCell id="n35" value="Criterio de aprobación de C1: M2a = 0 (fuga de recuperación). No basta con M2b = 0: que el modelo no repita un dato ajeno que el índice ya le entregó no es un control, es suerte." style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontColor=#1B5E20;fontSize=14;align=left;verticalAlign=top;fontStyle=2;" vertex="1" parent="1">
           <mxGeometry x="40" y="1276" width="1560" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="n36" value="&lt;b&gt;AMPLIACIÓN, no lo implementado en el Hito 3:&lt;/b&gt; JWT, Streamlit, FastAPI y SQLCipher en esta figura son la arquitectura de destino de la propuesta original (Hito 1, §9). El laboratorio que se mide en el Hito 3 es más simple: CLI propia (sin Streamlit/FastAPI), firma HMAC-SHA256 en vez de JWT, y SQLite + ChromaDB sin SQLCipher. Ver CLAUDE.md, sección &quot;Inconsistencias conocidas&quot;." style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#FFF3CD;strokeColor=#B8860B;strokeWidth=2;fontColor=#6B4A00;fontSize=13;align=left;verticalAlign=middle;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1320" width="1560" height="60" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

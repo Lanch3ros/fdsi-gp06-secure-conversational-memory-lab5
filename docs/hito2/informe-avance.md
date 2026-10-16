@@ -56,7 +56,9 @@ respecto al Hito 1 y esta argumentada en `notas-de-implementacion.md`:
 T01 explota el primero y T02 el segundo. Con un solo canal, T01 no probaria
 persistencia real: la instruccion no se parece a la pregunta, y en un almacen
 casi vacio top-k la devolveria por descarte. Por eso ambos experimentos siembran
-20 registros de memoria legitima de fondo antes de atacar.
+20 registros de memoria legitima de fondo antes de atacar. El writer Unsecure
+rechazo 5 de esos 20 por no traer ninguna pista de retencion (`seed_rejected`
+en `audit.jsonl`): se sembraron 20 intentos, se guardaron 15.
 
 ---
 

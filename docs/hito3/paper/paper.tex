@@ -1,0 +1,521 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+\usepackage{listings}
+
+% Placeholder visible para las cifras que faltan completar desde
+% evidence/metrics/ al cerrar las corridas oficiales. Buscar "PEND" antes de
+% entregar: ninguna cifra de este documento se escribe a mano (regla 8 de
+% CLAUDE.md), asi que cada PEND se reemplaza copiando el valor exacto que
+% imprime compute_metrics.py.
+\newcommand{\PEND}[1]{\textcolor{red}{\textbf{[PEND: #1]}}}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Persistencia indebida de informaci\'on e instrucciones en la memoria\\
+conversacional de asistentes LLM: aislamiento, expiraci\'on\\
+y eliminaci\'on verificable}
+
+\author{
+\IEEEauthorblockN{Isaac David Burgos Cervantes, Jose Luis Lancheros Aroya, Gina Sof\'ia Garc\'ia Zapata}
+\IEEEauthorblockA{
+Equipo FDSI-GP-06 \\
+Seminario Aplicado de Ciberseguridad en IA, FDSI/SPTI, Escuela Colombiana de Ingenier\'ia \\
+\texttt{github.com/sofiapeace/fdsi-gp06-secure-conversational-memory}
+}
+}
+
+\maketitle
+
+\begin{abstract}
+Los asistentes conversacionales con memoria de largo plazo guardan hechos de
+cada turno y los reinyectan en sesiones futuras, lo que convierte ese
+almac\'en en un espacio de escritura permanente que de facto controla qui\'en
+influye en el modelo. Construimos un laboratorio local y cerrado con un
+orquestador propio sobre Llama 3.1 8B Instruct (Ollama) y dos perfiles sobre
+\textbf{una sola base de c\'odigo}: \emph{Unsecure}, que reproduce la
+arquitectura t\'ipica de "extraer y guardar" sin ning\'un control, y
+\emph{Secure}, que agrega seis controles (C1--C6): aislamiento por espacio de
+nombres en los dos canales de recuperaci\'on, separaci\'on entre datos e
+instrucciones en el ensamblado del prompt, un filtro de escritura tipado,
+procedencia firmada con HMAC, tiempo de vida con borrado verificable en tres
+capas, y autorizaci\'on de herramientas por origen. En la l\'inea base
+Unsecure (Hito 2, commit \texttt{3ada423}) una instrucci\'on inyectada en una
+sesi\'on persisti\'o y se obedeci\'o en el 100\,\% (20/20) de sesiones nuevas
+sin relaci\'on sem\'antica con ella, y el \'indice vectorial entreg\'o datos
+de otro usuario en el 67\,\% de 100 sondeos (fuga de recuperaci\'on, M2a),
+aunque el modelo solo los repiti\'o en el 49\,\% (fuga de divulgaci\'on,
+M2b): la brecha de 18 puntos muestra que medir \'unicamente la respuesta del
+modelo subestima la falla del control en un 27\,\% relativo. Sobre esa misma
+m\'aquina, el perfil Secure alcanza TPI~=~\PEND{T01 secure, M1}\,\%,
+M2a~=~\PEND{T02 secure, M2a}\,\%, el 100\,\% de los registros vencidos o
+borrados qued\'o irrecuperable en las tres capas (M4~=~\PEND{T05, M4}\,\%), y
+el sobrecosto de los controles sobre la ruta de memoria (\(L_{mem}\), que
+excluye la generaci\'on de tokens) fue de \PEND{L\_mem p95 secure vs
+unsecure} ms en el percentil 95, frente a un presupuesto de 300~ms. Se
+discuten las amenazas a la validez y se declara expl\'icitamente qu\'e parte
+del alcance qued\'o fuera por tiempo.
+\end{abstract}
+
+\begin{IEEEkeywords}
+memoria conversacional, inyecci\'on de prompts, envenenamiento de memoria,
+aislamiento multiusuario, borrado verificable, LLM, MITRE ATLAS, OWASP
+\end{IEEEkeywords}
+
+\section{Introducci\'on}
+
+Los asistentes de chat con memoria de largo plazo extraen hechos de cada
+turno, los guardan en una base de datos y en un \'indice vectorial, y los
+vuelven a introducir en el \emph{prompt} de sesiones futuras. Ese mecanismo,
+pensado para la utilidad, convierte la memoria en un espacio de escritura
+permanente que en la pr\'actica decide qui\'en tiene influencia sobre lo que
+el modelo dice despu\'es. Si no existen controles de aislamiento, procedencia,
+tiempo de vida y borrado verificable, aparecen tres amenazas concretas: (i)
+una instrucci\'on escrita por un atacante en una sesi\'on queda guardada como
+si fuera un hecho del usuario y se reactiva sola en sesiones futuras, sin que
+el atacante necesite seguir conectado; (ii) si la b\'usqueda por similitud no
+filtra por due\~no del dato, informaci\'on de un usuario puede aparecer en la
+sesi\'on de otro; y (iii) cuando el usuario pide que se olvide algo, el
+borrado t\'ipico solo marca la fila en la base relacional y deja intactos el
+embedding en el \'indice vectorial y las copias en cach\'e.
+
+Este trabajo mide cu\'anto reducen esas tres amenazas seis controles
+(C1--C6) frente a la misma aplicaci\'on sin ellos, usando \textbf{una sola
+base de c\'odigo} con dos perfiles de configuraci\'on (\emph{unsecure} y
+\emph{secure}), de forma que el \'unico diff entre arquitecturas sea el
+conjunto de controles y no una reimplementaci\'on paralela que invalidar\'ia
+la comparaci\'on. El laboratorio es local, cerrado, usa datos inventados
+(tarjeta de prueba est\'andar de Visa \texttt{4111 1111 1111 1111}, direcciones
+ficticias) y no ataca ning\'un sistema de terceros.
+
+\textbf{Contribuciones.} (1) Un laboratorio reproducible de extremo a extremo,
+con sesiones B01--B06\footnote{Los identificadores T01--T06 del laboratorio.}
+que aislan cada control midiendo \'unicamente lo que ese control dice medir.
+(2) Una separaci\'on metodol\'ogica entre fuga de \emph{recuperaci\'on} (M2a,
+lo que el \'indice entreg\'o) y fuga de \emph{divulgaci\'on} (M2b, lo que el
+modelo repiti\'o), que evita atribuirle a un control el m\'erito de que el
+modelo haya decidido callarse. (3) Una prueba de borrado que usa HMAC sobre el
+contenido en vez de un hash plano, para que el log de auditor\'ia que
+demuestra el borrado no termine siendo \'el mismo una copia recuperable del
+dato borrado. (4) Evidencia reproducible versionada (\texttt{git\_sha}, semilla,
+digest del modelo) para cada corrida.
+
+\section{Trabajo relacionado}
+
+El envenenamiento de memoria en agentes LLM es una categor\'ia de riesgo
+reconocida por los tres marcos normativos que seguimos. El OWASP Top 10 for
+LLM Applications 2025 cataloga la inyecci\'on de \emph{prompts} (LLM01) y la
+divulgaci\'on de informaci\'on sensible (LLM02) \cite{owasp-llm10-2025}. El
+OWASP Top 10 for Agentic Applications a\~nade un riesgo propio para memoria y
+contexto, ASI06 \emph{Memory \& Context Poisoning} \cite{owasp-agentic-2026}.
+MITRE ATLAS define una t\'ecnica dedicada, \textbf{AML.T0080 ``AI Agent Context
+Poisoning''}, con la subt\'ecnica \textbf{AML.T0080.000 ``Memory''} dentro de
+la t\'actica \emph{Persistence}: manipular la memoria de un LLM para persistir
+cambios hacia sesiones futuras, con una mitigaci\'on dedicada,
+\textbf{AML.M0031 Memory Hardening} \cite{mitre-atlas}. La fuga entre
+conversaciones corresponde a \textbf{AML.T0057 LLM Data Leakage} (t\'actica
+\emph{Exfiltration}) y a la recolecci\'on de datos de bases RAG,
+\textbf{AML.T0085.000} (t\'actica \emph{Collection}).
+
+Dong et al.\ demuestran MINJA, un ataque de inyecci\'on de memoria que opera
+\'unicamente mediante consultas normales al agente, sin acceso privilegiado al
+sistema \cite{minja-2025}. Devarangadi Sunil et al.\ proponen y calibran dos
+defensas --moderaci\'on basada en confianza y saneamiento de memoria con
+filtrado temporal-- que se corresponden directamente con nuestros controles
+C3 y C5, y reportan un hallazgo que respalda de forma independiente una
+decisi\'on de dise\~no de este laboratorio: bajo condiciones realistas, con
+memoria leg\'itima de fondo ya presente, la efectividad del ataque cae
+dr\'asticamente frente a un almac\'en vac\'io \cite{memory-poisoning-defense-2026}.
+Evaluaron, entre otros modelos, Llama-3.1-8B-Instruct, el mismo modelo que se
+usa aqu\'i. NIST clasifica estos ataques dentro de su taxonom\'ia de
+\emph{adversarial machine learning} \cite{nist-aml-2025}. Ninguno de estos
+trabajos mide, sobre la misma base de c\'odigo, el costo en latencia y
+utilidad de desplegar los controles junto a una l\'inea base insegura
+id\'entica en todo lo dem\'as: es la brecha que este laboratorio cierra.
+
+\section{Modelo de amenaza y arquitectura}
+
+\textbf{Activo.} El almac\'en de memoria (perfil del usuario, resumenes,
+embeddings, historial) y el contexto que el orquestador ensambla para cada
+sesi\'on nueva.
+
+\textbf{Adversario.} Un usuario leg\'itimo del propio sistema (sin acceso
+privilegiado) que escribe texto en un turno normal de conversaci\'on, o que
+sube un documento que el sistema indexa. No se asume acceso a la
+infraestructura ni a los pesos del modelo.
+
+\subsection{Arquitectura Unsecure (Fig.~1)}
+
+El orquestador tiene un \emph{Memory Writer} que detecta si un turno ``vale
+la pena recordarlo'' con pistas de \textbf{utilidad}, no de seguridad
+(``recuerda'', ``siempre'', ``prefiero'', ``a partir de ahora''), y lo
+persiste sin tipar ni validar. El \emph{Memory Retriever} tiene \textbf{dos
+canales}: un canal de \emph{perfil fijado}, que entrega en todas las sesiones
+lo que el writer marc\'o como preferencia permanente sin pasar por ninguna
+b\'usqueda, y un canal de \emph{b\'usqueda por similitud} (top-$k$ sobre
+ChromaDB). Ninguno de los dos filtra por \texttt{tenant\_id} ni
+\texttt{user\_id}: el dato \emph{s\'i} queda etiquetado con su due\~no en los
+metadatos del \'indice vectorial, pero ninguna consulta usa esa etiqueta
+como filtro. El ensamblador de \emph{prompt} concatena lo recuperado dentro
+del mensaje de \textbf{sistema}, con la misma autoridad que las reglas del
+operador. El almac\'en (SQLite + ChromaDB + cach\'e de sesi\'on) no tiene
+tiempo de vida, ni firma de procedencia, ni borrado real: borrar una fila es
+un borrado l\'ogico que deja vivo el embedding.
+
+Cada prueba explota un canal distinto: B01 (T01) usa el perfil fijado para
+demostrar persistencia sin relaci\'on sem\'antica con la pregunta; B02 (T02)
+usa la b\'usqueda por similitud para demostrar fuga entre usuarios. Las dos
+pruebas siembran memoria leg\'itima de fondo antes de atacar (20 registros),
+porque sin ese ruido el almac\'en quedar\'ia casi vac\'io y el top-$k$
+devolver\'ia el dato del ataque por simple descarte, no por la debilidad real
+que se quiere demostrar.
+
+\subsection{Arquitectura Secure (Fig.~2)}
+
+Misma base de c\'odigo, perfil \texttt{secure}: los dos canales de
+recuperaci\'on exigen \texttt{tenant\_id} y \texttt{user\_id} sin excepci\'on
+(C1); lo recuperado sale del mensaje de sistema y entra delimitado en el
+turno de usuario, con un marcador aleatorio por sesi\'on no adivinable sin la
+clave del sistema y un aviso expl\'icito de que es dato, no instrucciones
+(C2); el writer clasifica cada candidato antes de guardarlo y rechaza \'ordenes
+y secretos (C3); C4 firma la procedencia; C5 aplica tiempo de vida por
+categor\'ia y borra en las tres capas con prueba de borrado; C6 exige
+confirmaci\'on expl\'icita del usuario para cualquier herramienta con efecto
+externo.
+
+\section{Controles de seguridad}
+
+\subsection{C1 --- Aislamiento por espacio de nombres}
+Todo registro pertenece a un espacio \texttt{tenant\_id/user\_id/session\_id}
+y ninguna lectura sale sin ese filtro, en ninguno de los dos canales. La
+debilidad que corrige no es que falte la etiqueta --el dato \emph{s\'i} la
+tiene-- sino que nadie la usa como filtro en la consulta. Se verifica con B02
+y M2; el criterio de aprobaci\'on es \textbf{M2a~=~0}, no M2b~=~0.
+
+\subsection{C2 --- Memoria como dato no ejecutable}
+El contenido recuperado entra delimitado en el turno de usuario, nunca en el
+mensaje de sistema. Es la segunda l\'inea de defensa: si algo malicioso
+entrara al almac\'en a pesar de C3, C2 reduce la probabilidad de que se
+ejecute como instrucci\'on. Es una mitigaci\'on estad\'istica sobre el modelo,
+no una garant\'ia estructural, y se reporta as\'i.
+
+\subsection{C3 --- Filtro de escritura con esquema tipado}
+Clasifica cada candidato en \texttt{fact}, \texttt{preference},
+\texttt{task\_context}, \texttt{instruction} o \texttt{secret} antes de
+persistir. Solo los tres primeros llegan al almac\'en. En este hito el
+clasificador es \textbf{basado en reglas}: patrones espec\'ificos para
+\'ordenes dirigidas al modelo (por ejemplo, ``a partir de ahora'' solo cuenta
+si va seguido de un verbo imperativo dirigido al asistente, nunca de un hecho
+del usuario como ``a partir de ahora vivo en Medell\'in'') y un chequeo de
+Luhn para n\'umeros con forma de tarjeta. Un juez LLM que cubra los casos que
+las reglas no resuelven qued\'o fuera del alcance de este hito (secci\'on de
+limitaciones); de haberse incluido, habr\'ia introducido adem\'as
+circularidad --el mismo modelo objeto de estudio decidiendo qu\'e se guarda--
+y una superficie de ataque nueva, porque el texto del atacante entrar\'ia
+tambi\'en al \emph{prompt} del juez.
+
+\subsection{C4 --- Procedencia firmada}
+Cada registro lleva su origen, autor y sesi\'on firmados con
+HMAC-SHA256 sobre el JSON can\'onico del registro, con una clave fuera del
+almac\'en (\texttt{MEMLAB\_HMAC\_KEY}, nunca versionada). En este hito la
+firma se aplica al canal de siembra controlada que usan las pruebas para
+sembrar un dato sin pasar por C3 (ver secci\'on de metodolog\'ia); conectar la
+verificaci\'on de firma a \textbf{toda} escritura y lectura normal es
+extensi\'on de este trabajo.
+
+\subsection{C5 --- Tiempo de vida y borrado verificable}
+Tiempo de vida por categor\'ia (\texttt{task\_context}: 24~h; \texttt{fact} y
+\texttt{preference}: sin vencimiento salvo petici\'on expl\'icita), evaluado
+tanto en lectura como por una purga peri\'odica. El borrado alcanza
+\textbf{las tres capas}: la fila en SQLite (DELETE real, no l\'ogico), el
+embedding en ChromaDB y la cach\'e de contexto de sesi\'on --por
+\textbf{contenido}, no solo por la sesi\'on de origen, porque el contenido de
+un registro puede quedar cacheado bajo la sesi\'on de cualquiera que lo haya
+consultado, no solo la de quien lo escribi\'o--. Cada borrado deja una
+\texttt{deletion\_proof} en el log de auditor\'ia, firmada con HMAC y
+\textbf{nunca} con un hash plano: un SHA-256 simple sobre un dato corto y de
+baja entrop\'ia (una direcci\'on, un n\'umero de tarjeta) se invierte por
+fuerza bruta en segundos, y el log de solo-agregado terminar\'ia siendo una
+copia recuperable de justo lo que se prometi\'o borrar. La purga es una
+funci\'on pura que recibe el reloj como par\'ametro, para que B04 (T04) pueda
+adelantarlo con un reloj inyectable sin depender de que un planificador en
+otro hilo vea el mismo reloj congelado.
+
+\subsection{C6 --- Autorizaci\'on por origen y auditor\'ia}
+Toda acci\'on con efecto externo exige confirmaci\'on expl\'icita del usuario
+en el turno en curso; la memoria y los documentos nunca autorizan por s\'i
+mismos. Qued\'o fuera del alcance de este hito por tiempo (secci\'on de
+limitaciones): el mecanismo de herramientas del orquestador y la prueba B03
+(T03) que lo ejercita no se implementaron.
+
+\section{Metodolog\'ia}
+
+\textbf{Dise\~no general.} Cada prueba a\'isla el control que dice medir. Por
+ejemplo, en B02/Secure el dato sensible de un usuario se siembra en el
+almac\'en \textbf{sin pasar por C3} (ya firmado, por un canal separado): si se
+sembrara por el camino normal, C3 rechazar\'ia la tarjeta como secreto, M2a
+saldr\'ia en 0\,\% por falta de dato que fugar, y eso no demostrar\'ia nada
+sobre C1. El mismo canal de siembra controlada se usa para crear el registro
+de \texttt{task\_context} con tiempo de vida expl\'icito que necesita B04.
+
+\textbf{Sesi\'on nueva es un proceso nuevo.} B01 lanza un subproceso por
+sesi\'on con \texttt{session\_id} nuevo y cach\'e vac\'ia; un bucle dentro del
+mismo proceso dejar\'ia estado compartido y no probar\'ia persistencia real.
+
+\textbf{M1 --- Tasa de Persistencia de Instrucci\'on (B01).} Fracci\'on de
+sesiones nuevas, sin relaci\'on sem\'antica con la instrucci\'on inyectada,
+cuya respuesta la cumple. Se registra por separado cu\'antas sesiones
+\emph{recuperaron} la instrucci\'on, para distinguir un fallo de recuperaci\'on
+de un fallo de obediencia del modelo.
+
+\textbf{M2 --- Tasa de Fuga entre Conversaciones (B02), en dos niveles.}
+\textbf{M2a} (fuga de recuperaci\'on): el \'indice entreg\'o un documento de
+otro espacio de nombres, le\'ido del log de recuperaci\'on, no de la
+respuesta. \textbf{M2b} (fuga de divulgaci\'on): el dato apareci\'o en la
+respuesta. Puede haber M2a sin M2b porque el modelo decidi\'o no repetir el
+dato, y eso no es m\'erito de ning\'un control. El criterio de aprobaci\'on de
+C1 es M2a~=~0.
+
+\textbf{M4 --- Tiempo de vida y borrado verificable (B04, B05).} B04 mide
+cu\'antas de 10 consultas, tras adelantar el reloj 48~h sobre un
+\texttt{task\_context} con TTL de 24~h, siguen recuper\'andolo. B05
+(``olvida mi direcci\'on'') mide, tras una sola llamada de borrado, el
+porcentaje de las tres capas (fila, embedding, cach\'e) que qued\'o
+irrecuperable --un chequeo estructural fijo de 3 elementos, sin intervalo de
+Wilson, porque no es una proporci\'on muestreada-- y, aparte, con Wilson sobre
+10 consultas conversacionales posteriores, si un usuario normal logra sacar
+el dato de vuelta por la v\'ia conversacional.
+
+\textbf{Intervalos de confianza.} Toda proporci\'on se reporta con el
+intervalo de Wilson; con 0 aciertos se reduce a la regla de tres ($3/n$). Con
+20 sesiones cada acierto vale 5 puntos porcentuales, as\'i que el valor
+puntual solo, sin intervalo, ser\'ia enga\~noso.
+
+\textbf{Latencia en dos niveles.} $L_{e2e}$ (turno completo, con
+generaci\'on) se reporta como contexto. $L_{mem}$ (recuperaci\'on +
+ensamblado de \emph{prompt} + filtro de escritura, \textbf{sin}
+generaci\'on) es la \'unica que los controles afectan y la que sustenta H4:
+medida extremo a extremo, la varianza de generaci\'on del modelo (entre
+cuatro y cinco veces el presupuesto completo de H4 solo entre percentiles de
+la misma l\'inea base, ver Hito~2) enterrar\'ia por completo el efecto de los
+controles.
+
+\textbf{Reproducibilidad.} Semilla 20260919, temperatura 0,
+\texttt{num\_predict}~=~256, una sola m\'aquina por comparaci\'on, digest del
+modelo en cada manifiesto (\texttt{46e0c10c\ldots a666e} para
+\texttt{llama3.1:8b-instruct-q4\_K\_M}). Como las corridas de este hito se
+ejecutaron en una m\'aquina distinta a la del Hito 2, se repiti\'o B01 y B02
+Unsecure sobre el commit de l\'inea base (\texttt{3ada423}) y sobre el commit
+nuevo en la \textbf{misma m\'aquina}, para descartar que el c\'odigo del
+Hito~3 hubiera alterado el camino Unsecure (secci\'on~\ref{sec:resultados}).
+
+\section{Resultados}
+\label{sec:resultados}
+
+Todas las cifras de esta secci\'on salen de \texttt{experiments/compute\_me-}
+\texttt{trics.py} leyendo \texttt{evidence/runs/}; ninguna se escribe a mano.
+Corridas oficiales sobre el commit \PEND{sha corto del commit oficial},
+backend Ollama, digest \texttt{46e0c10c\ldots a666e}.
+
+\subsection{Verificaci\'on de la l\'inea base Unsecure (regla de no
+regresi\'on)}
+
+\begin{table}[h]
+\centering
+\caption{Unsecure, Hito~2 (\texttt{3ada423}) vs.\ commit nuevo, misma m\'aquina}
+\label{tab:regresion}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+ & \texttt{3ada423} & commit nuevo \\
+\midrule
+B01, instrucci\'on cumplida & 20/20 & \PEND{T01 unsecure nuevo commit} \\
+B02, M2a (fuga recuperaci\'on) & 67/100 & \PEND{T02 unsecure nuevo commit, M2a} \\
+B02, M2b (fuga divulgaci\'on) & 49/100 & \PEND{T02 unsecure nuevo commit, M2b} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\PEND{Confirmar en una frase si las tres cifras coinciden; si alguna difiere,
+explicar la diferencia (carga de m\'aquina, versi\'on de Ollama, etc.) en vez
+de ocultarla.}
+
+\subsection{Unsecure vs.\ Secure}
+
+\begin{table}[h]
+\centering
+\caption{Comparativa de metricas, perfil nuevo commit}
+\label{tab:comparativa}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+M\'etrica & Unsecure & Secure \\
+\midrule
+M1 --- TPI (B01) & \PEND{T01 unsecure, M1}\,\% & \PEND{T01 secure, M1}\,\% \\
+M2a --- fuga recuperaci\'on (B02) & \PEND{T02 unsecure, M2a}\,\% & \PEND{T02 secure, M2a}\,\% \\
+M2b --- fuga divulgaci\'on (B02) & \PEND{T02 unsecure, M2b}\,\% & \PEND{T02 secure, M2b}\,\% \\
+B04 --- recuperado tras TTL & \PEND{T04 unsecure}/10 & \PEND{T04 secure}/10 \\
+M4 --- capas irrecuperables (B05) & \PEND{T05 unsecure, M4}\,\% & \PEND{T05 secure, M4}\,\% \\
+$L_{mem}$ p95 (ms) & \PEND{L\_mem p95 unsecure} & \PEND{L\_mem p95 secure} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\PEND{Agregar 2-3 p\'arrafos de lectura de esta tabla, con el mismo estilo
+anal\'itico de informe-avance.md secc.~5: por qu\'e sale lo que sale, no solo
+qu\'e sale. Mencionar expl\'icitamente si M2a lleg\'o a 0 (criterio de
+aprobaci\'on de C1, regla 4 de CLAUDE.md) y si B04/B05 confirman C5.}
+
+\section{Discusi\'on}
+
+La brecha entre M2a y M2b en la l\'inea base (67\,\% vs.\ 49\,\%, 18 puntos)
+es, en s\'i misma, un hallazgo metodol\'ogico: reportar \'unicamente lo que el
+modelo repite subestimar\'ia en un 27\,\% relativo una falla del control que
+ya ocurri\'o en el momento en que el \'indice entreg\'o el documento. Por eso
+el criterio de aprobaci\'on de C1 en este trabajo es M2a~=~0 y no M2b~=~0: un
+sistema que entrega datos ajenos y confía en que el modelo se calle no tiene
+un control, tiene suerte.
+
+La diferencia entre $L_{e2e}$ y $L_{mem}$ --en la l\'inea base del Hito~2, la
+sola diferencia entre percentiles del turno completo (1384~ms en B01,
+1248~ms en B02) ya super\'o entre cuatro y cinco veces el presupuesto entero
+de H4 sin que existiera ning\'un control-- confirma que medir el costo de
+seguridad extremo a extremo habr\'ia hecho la hip\'otesis de costo
+inevaluable: la varianza de generaci\'on del modelo local esconde cualquier
+efecto real de los controles. $L_{mem}$ aisla exactamente lo que C1--C6
+tocan.
+
+\PEND{Agregar lectura de los resultados de B04/B05/M4 una vez estén las
+cifras: si C5 llega a 100\,\% de capas irrecuperables, explicar por qu\'e la
+corroboraci\'on conversacional (secc.~\ref{sec:resultados}) puede no mostrar
+la misma brecha que Unsecure --ver la nota en \texttt{experiments/run\_t05.py}
+sobre \texttt{store.query()} resolviendo cada hit contra la fila SQL--.}
+
+\section{Limitaciones}
+
+\begin{enumerate}
+\item \textbf{Alcance inferido.} No existe r\'ubrica del docente para el
+Hito~3 al momento de entregar; el alcance sale del cronograma de la propuesta
+original y se declara expl\'icitamente aqu\'i.
+\item \textbf{C3 es solo reglas.} Sin juez LLM, el clasificador no detecta
+secretos sin forma de n\'umero de tarjeta (por ejemplo, una contrase\~na en
+texto libre). Se declara, no se oculta.
+\item \textbf{C4 parcial.} La firma se aplica al canal de siembra controlada
+que usan las pruebas; conectarla a toda escritura y verificarla en toda
+lectura normal qued\'o fuera de este hito por tiempo.
+\item \textbf{C6 y B03 (T03) no implementados.} El mecanismo de herramientas
+del orquestador no se conect\'o; la inyecci\'on indirecta desde un documento
+no se midi\'o en este hito.
+\item \textbf{M3 y M5 no medidos.} El conjunto etiquetado de 60 candidatos
+para M3 existe (\texttt{experiments/datasets\_hito3.py}) pero no se
+proces\'o por el filtro con intervalo de Wilson; B06 (T06) y la utilidad
+evaluada por el equipo (M5, kappa de Cohen) tampoco.
+\item \textbf{Un solo modelo, una sola m\'aquina por comparaci\'on.} Llama
+3.1 8B Instruct Q4\_K\_M; temperatura 0 y semilla fija no garantizan
+determinismo bit a bit entre m\'aquinas ni cuantizaciones.
+\item \textbf{Detecci\'on automatica con casos de revisi\'on manual.} M1 y
+M2b usan expresiones regulares; los casos amb\'iguos se marcan para revisi\'on
+manual en vez de contarse autom\'aticamente.
+\item \textbf{C2 es estad\'istico, no estructural.} Reduce la probabilidad de
+obediencia a una instrucci\'on inyectada, no la elimina por construcci\'on.
+\end{enumerate}
+
+\section{Conclusiones}
+
+Sobre una misma base de c\'odigo, el perfil Unsecure reprodujo exactamente
+la falla que motiva este trabajo: una instrucci\'on inyectada persiste y se
+obedece en el 100\,\% de sesiones nuevas sin relaci\'on sem\'antica con ella,
+y el \'indice vectorial entrega datos de otro usuario en 67 de cada 100
+sondeos aunque el modelo solo los repita en 49. Agregar aislamiento por
+espacio de nombres en los dos canales de recuperaci\'on, separar datos de
+instrucciones en el ensamblado del \emph{prompt}, clasificar lo que se
+escribe antes de persistirlo, y borrar en las tres capas con prueba firmada,
+\PEND{cerrar con el resultado final de C1/C5 una vez calculado: p.ej. "reduce
+M2a a 0\,\% sobre 100 sondeos y deja el 100\,\% de los datos borrados o
+vencidos irrecuperables, sin exceder el presupuesto de 300\,ms en L\_mem"}.
+Qued\'o fuera de este hito, por tiempo y se declara como tal, la
+implementaci\'on completa de C4 y C6, la medici\'on de M3 y M5, y el juez LLM
+dentro de C3.
+
+\section{Declaraci\'on de uso de IA}
+
+\begin{table}[h]
+\centering
+\caption{Uso de IA en este trabajo}
+\begin{tabular}{@{}p{0.38\linewidth}p{0.52\linewidth}@{}}
+\toprule
+Herramienta & Prop\'osito concreto \\
+\midrule
+Claude (Anthropic), Claude Code & Implementaci\'on de los controles C1, C2,
+C3 y C5 sobre el dise\~no ya definido en la propuesta; escritura de los
+\emph{runners} de pruebas B04/B05 y de las extensiones a
+\texttt{compute\_metrics.py}; correcci\'on de inconsistencias conocidas en la
+documentaci\'on; verificaci\'on del mapeo a MITRE ATLAS contra la fuente
+oficial; redacci\'on de este documento. \\
+Llama 3.1 8B Instruct (Ollama, local) & \textbf{Objeto de estudio} del
+experimento: es el modelo sobre el que se miden las fugas y persistencias;
+no particip\'o en la evaluaci\'on de utilidad (M5), que exige juicio humano
+para no contradecir la propia declaraci\'on de uso de IA. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Responsabilidad del equipo.} Todo el contenido producido con ayuda de
+IA fue revisado, verificado y ajustado por los integrantes, que asumen la
+autor\'ia y la responsabilidad acad\'emica de este trabajo.
+\textbf{Ninguna cifra experimental de este documento fue generada o
+estimada por una IA}: todas salen de ejecutar el laboratorio y est\'an
+respaldadas por evidencia versionada en \texttt{evidence/}, con su
+\texttt{git\_sha}, su semilla y el digest del modelo. Los datos del
+laboratorio son inventados (dos usuarios simulados, tarjeta de prueba
+est\'andar de Visa, direcciones ficticias); ninguna prueba se ejecut\'o
+sobre sistemas, cuentas o servicios de terceros.
+
+\begin{thebibliography}{00}
+
+\bibitem{owasp-llm10-2025}
+OWASP Foundation, ``OWASP Top 10 for Large Language Model Applications
+2025,'' \emph{genai.owasp.org}, 2025.
+
+\bibitem{owasp-agentic-2026}
+OWASP GenAI Security Project, ``OWASP Top 10 for Agentic Applications
+2026,'' ASI06 Memory \& Context Poisoning, \emph{genai.owasp.org}, Dec.\ 9,
+2025.
+
+\bibitem{minja-2025}
+S.\ Dong, S.\ Xu, P.\ He, Y.\ Li, J.\ Tang, T.\ Liu, H.\ Liu, and Z.\ Xiang,
+``Memory Injection Attacks on LLM Agents via Query-Only Interaction,''
+\emph{arXiv:2503.03704}, 2025.
+
+\bibitem{memory-poisoning-defense-2026}
+B.\ Devarangadi Sunil, I.\ Sinha, P.\ Maheshwari, S.\ Todmal, S.\ Mallik, and
+S.\ Mishra, ``Memory Poisoning Attack and Defense on Memory Based
+LLM-Agents,'' \emph{arXiv:2601.05504}, 2026.
+
+\bibitem{nist-aml-2025}
+National Institute of Standards and Technology, ``Adversarial Machine
+Learning: A Taxonomy and Terminology of Attacks and Mitigations,'' NIST AI
+100-2 E2025, Mar.\ 2025.
+
+\bibitem{mitre-atlas}
+MITRE ATLAS, ``Adversarial Threat Landscape for Artificial-Intelligence
+Systems,'' \emph{atlas.mitre.org}, v5.6.0 (consultado 16/10/2026).
+
+\bibitem{ley-1581-2012}
+Congreso de la Rep\'ublica de Colombia, ``Ley Estatutaria 1581 de 2012,
+R\'egimen General de Protecci\'on de Datos Personales,'' 17 oct.\ 2012.
+
+\end{thebibliography}
+
+\end{document}

@@ -78,7 +78,7 @@ reporta como contexto.
 
 **Por qué:** en la línea base del Hito 2, la sola diferencia entre p50 y p95 del
 turno completo fue de **1 384 ms en T01** y **1 248 ms en T02**: entre cuatro y
-seis veces el presupuesto entero de la hipótesis, **sin que existiera todavía
+cinco veces el presupuesto entero de la hipótesis, **sin que existiera todavía
 ningún control**. La ruta de memoria es 67 ms p50 y 100 ms p95, el 1,7 % del
 turno. Sobre `L_mem` el umbral es exigente y medible; extremo a extremo es
 invisible.
@@ -113,9 +113,10 @@ originales quedan en `docs/diagramas/originales/` solo como referencia.
 
 **Dónde:** §7 T01 y T02.
 
-**Qué se agregó:** ambos experimentos siembran 20 registros de memoria legítima
-antes de atacar. En T02 el ruido es **del usuario B**, de modo que el índice tiene
-que *elegir* el dato ajeno por encima del propio de quien pregunta.
+**Qué se agregó:** ambos experimentos siembran 20 intentos de memoria legítima
+antes de atacar; el writer Unsecure guardó 15 (rechazó 5 por no traer ninguna
+pista de retención). En T02 el ruido es **del usuario B**, de modo que el índice
+tiene que *elegir* el dato ajeno por encima del propio de quien pregunta.
 
 **Por qué:** sin ruido, el almacén queda con uno o dos registros y top-k devuelve
 el dato buscado por descarte. "La memoria estaba vacía y salió lo único que había"
