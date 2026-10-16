@@ -25,11 +25,11 @@ Los tres integrantes presentan el progreso del Hito 2:
 |---|---|---|
 | 1 | Propuesta estructurada | Entregada 05/09 · **versión 2 del 21/09** — [`docs/hito1/FDSIGP06_Propuesta_Estructurada_v2.pdf`](docs/hito1/FDSIGP06_Propuesta_Estructurada_v2.pdf) |
 | 2 | Laboratorio **Unsecure**, T01 y T02 con evidencia, metricas M1 y M2 de linea base | **Listo** — resultados en `docs/hito2/informe-avance.md` · [video del avance](#video-del-avance) |
-| 3 | Controles C1–C6, T03–T06, comparativa Secure vs Unsecure, paper IEEE | Pendiente |
+| 3 | Controles C1, C2, C3 (reglas) y C5; T01, T02, T04 y T05 en los dos perfiles; paper IEEE y presentacion | **Entregado 17/10/2026**, sin rubrica del docente (alcance inferido, ver `docs/hito3/plan-entrega.md`). C4 completo, C6, T03, M3 y M5 quedaron fuera por tiempo — declarado en Limitaciones del paper. |
 
-El perfil `secure` existe en el codigo y falla de forma explicita con
-`NotImplementedError` indicando el control que falta. Es deliberado: el Avance 1
-entrega la linea base, no una version segura a medias.
+El perfil `secure` ya no lanza `NotImplementedError`: C1, C2, C3 y C5 corren de
+punta a punta. C4 (firma) solo cubre el canal de siembra controlada que usan
+las pruebas; C6 y el mecanismo de herramientas no se implementaron.
 
 ## Linea base medida (22/09/2026 · commit `3ada423` · Llama 3.1 8B Instruct Q4_K_M)
 
@@ -48,6 +48,26 @@ Una corrida anterior, del 19/09, dio **exactamente los mismos** M1, M2a y M2b. L
 unico que se movio fue la latencia extremo a extremo, por carga de la maquina,
 mientras la ruta de memoria se mantuvo entre 66 y 67 ms.
 
+## Comparativa Unsecure vs Secure (Hito 3)
+
+Corridas oficiales sobre commit `[PEND]`, misma maquina de la linea base de
+arriba. Antes de comparar, se repitieron T01 y T02 Unsecure sobre `3ada423` y
+sobre el commit nuevo, en esta misma maquina, para descartar que el codigo del
+Hito 3 hubiera tocado el camino Unsecure (regla 1 de `CLAUDE.md`): `[PEND:
+coincidieron / no coincidieron y por que]`.
+
+| Metrica | Unsecure | Secure |
+|---|---|---|
+| **M1** TPI (T01) | `[PEND]` | `[PEND]` |
+| **M2a** fuga de recuperacion (T02) | `[PEND]` | `[PEND]` |
+| **M2b** fuga de divulgacion (T02) | `[PEND]` | `[PEND]` |
+| T04, recuperado tras vencer el TTL | `[PEND]`/10 | `[PEND]`/10 |
+| **M4** capas irrecuperables (T05) | `[PEND]` | `[PEND]` |
+| `L_mem` p95 | `[PEND]` | `[PEND]` |
+
+Cifras completas, con intervalos de Wilson, en `evidence/metrics/`. Detalle y
+discusion en `docs/hito3/paper/paper.tex`.
+
 ## Como se corre
 
 ```bash
@@ -55,9 +75,11 @@ make setup          # entorno con Python 3.11 y dependencias
 make model          # descarga llama3.1:8b-instruct-q4_K_M en Ollama (~5 GB)
 make info           # perfil activo e identidad exacta del modelo
 make test           # suite de pytest, segundos, sin modelo
-make t01            # T01: 20 sesiones nuevas
-make t02            # T02: 100 sondeos
-make metrics        # recalcula M1 y M2 desde la evidencia
+make t01 PROFILE=secure N_T01=40   # T01: sesiones nuevas (20 Unsecure, 40 Secure)
+make t02 PROFILE=secure            # T02: 100 sondeos
+make t04 PROFILE=secure            # T04: TTL con reloj congelado adelantado 48h
+make t05 PROFILE=secure            # T05: "olvida mi direccion", tres capas
+make metrics                       # recalcula M1-M4 desde la evidencia
 ```
 
 Para el video demo, la conversacion interactiva avisa en pantalla cuando la
@@ -110,18 +132,25 @@ verificar la tuberia sin modelo. Queda marcado en el manifiesto y
 ```
 src/memlab/           nucleo del laboratorio
   memory/store.py     las tres capas: SQLite, ChromaDB, cache de sesion
-  memory/writer.py    C3 — que se guarda (en Unsecure: todo, sin validar)
-  memory/retriever.py C1 — que se recupera (en Unsecure: sin filtro de dueno)
-  memory/lifecycle.py C5 — tiempo de vida y borrado
-  prompt.py           C2 — en Unsecure la memoria entra con autoridad de sistema
-  provenance.py       C4 — HMAC de procedencia
-  tools.py            C6 — autorizacion de herramientas
-  orchestrator.py     un turno completo, con las dos latencias
+  memory/writer.py    C3 — filtro de escritura (Unsecure: todo sin validar; Secure: reglas)
+  memory/retriever.py C1 — namespacing en los dos canales + filtro de TTL (C5) en lectura
+  memory/lifecycle.py C5 — tiempo de vida, purga y borrado en tres capas con deletion_proof
+  prompt.py           C2 — Unsecure inyecta en el sistema; Secure delimita en el turno de usuario
+  provenance.py       C4 — firma y verificacion HMAC
+  tools.py            C6 — autorizacion de herramientas (no conectado al orquestador)
+  orchestrator.py     un turno completo; seed_memory(bypass_c3=True) para sembrar firmado
   detectors.py        deteccion automatica para M1 y M2b
   stats.py            Wilson, regla de tres, percentiles
-experiments/          runners de T01 y T02 + calculo de metricas
+experiments/
+  run_t01.py, run_t02.py, run_t04.py, run_t05.py   runners por prueba
+  datasets_hito3.py   candidatos de M3, turnos/preguntas de T06, documento de T03
+  compute_metrics.py  M1, M2, T04 y M4 desde evidence/runs/
 evidence/runs/        una carpeta por corrida: manifiesto, log de auditoria, resultados
-evidence/metrics/     M1 y M2 calculadas desde la evidencia
+evidence/metrics/     metricas calculadas desde la evidencia
+docs/hito3/
+  plan-entrega.md     plan de la entrega del 17/10/2026
+  paper/paper.tex     paper IEEE (IEEEtran)
+  presentacion.md     guion de las diapositivas
 docs/                 propuesta, diagramas, material de los hitos
 ```
 
