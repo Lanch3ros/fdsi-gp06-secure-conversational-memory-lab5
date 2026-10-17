@@ -13,6 +13,13 @@
   "granularidad_pp": 5.0,
   "sesiones_que_recuperaron_la_instruccion": 20,
   "sesiones_para_revision_manual": [],
+  "latencia_ms": {
+    "e2e_p50": 3894.93,
+    "e2e_p95": 5279.04,
+    "mem_p50": 66.57,
+    "mem_p95": 100.44,
+    "nota": "mem_* excluye la generacion de tokens. Es la unica latencia que los controles afectan y la que debe sustentar H4."
+  },
   "umbral_propuesta": {
     "unsecure": ">= 70 %",
     "secure": "<= 5 %"
