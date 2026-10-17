@@ -59,15 +59,17 @@ sin relaci\'on sem\'antica con ella, y el \'indice vectorial entreg\'o datos
 de otro usuario en el 67\,\% de 100 sondeos (fuga de recuperaci\'on, M2a),
 aunque el modelo solo los repiti\'o en el 49\,\% (fuga de divulgaci\'on,
 M2b): la brecha de 18 puntos muestra que medir \'unicamente la respuesta del
-modelo subestima la falla del control en un 27\,\% relativo. Sobre esa misma
-m\'aquina, el perfil Secure alcanza TPI~=~\PEND{T01 secure, M1}\,\%,
-M2a~=~\PEND{T02 secure, M2a}\,\%, el 100\,\% de los registros vencidos o
-borrados qued\'o irrecuperable en las tres capas (M4~=~\PEND{T05, M4}\,\%), y
-el sobrecosto de los controles sobre la ruta de memoria (\(L_{mem}\), que
-excluye la generaci\'on de tokens) fue de \PEND{L\_mem p95 secure vs
-unsecure} ms en el percentil 95, frente a un presupuesto de 300~ms. Se
-discuten las amenazas a la validez y se declara expl\'icitamente qu\'e parte
-del alcance qued\'o fuera por tiempo.
+modelo subestima la falla del control en un 27\,\% relativo. En la misma
+m\'aquina y con el mismo modelo, repetir el perfil Unsecure con el c\'odigo del
+Hito~3 dio exactamente las mismas cifras. Con C1, C2, C3 y C5 activos, el
+perfil Secure obtuvo TPI~=~0\,\% (0/40, IC~95\,\% [0--8,76]), porque el filtro
+de escritura rechaz\'o la instrucci\'on antes de guardarla; M2a~=~M2b~=~0\,\%
+(0/100, IC [0--3,70]), con el dato ajeno presente en el almac\'en; 0 de 10
+recuperaciones de un dato vencido (frente a 10 de 10); y borrado efectivo en
+las tres capas (frente a una de tres). El percentil 95 de la ruta de memoria
+(\(L_{mem}\), que excluye la generaci\'on de tokens) pas\'o de 83 a 86~ms,
+frente a un presupuesto de 300~ms. Se discuten las amenazas a la validez y se
+declara expl\'icitamente qu\'e parte del alcance qued\'o fuera por tiempo.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -102,7 +104,7 @@ la comparaci\'on. El laboratorio es local, cerrado, usa datos inventados
 ficticias) y no ataca ning\'un sistema de terceros.
 
 \textbf{Contribuciones.} (1) Un laboratorio reproducible de extremo a extremo,
-con sesiones B01--B06\footnote{Los identificadores T01--T06 del laboratorio.}
+con pruebas T01--T06
 que aislan cada control midiendo \'unicamente lo que ese control dice medir.
 (2) Una separaci\'on metodol\'ogica entre fuga de \emph{recuperaci\'on} (M2a,
 lo que el \'indice entreg\'o) y fuga de \emph{divulgaci\'on} (M2b, lo que el
@@ -175,10 +177,10 @@ operador. El almac\'en (SQLite + ChromaDB + cach\'e de sesi\'on) no tiene
 tiempo de vida, ni firma de procedencia, ni borrado real: borrar una fila es
 un borrado l\'ogico que deja vivo el embedding.
 
-Cada prueba explota un canal distinto: B01 (T01) usa el perfil fijado para
-demostrar persistencia sin relaci\'on sem\'antica con la pregunta; B02 (T02)
+Cada prueba explota un canal distinto: T01 usa el perfil fijado para
+demostrar persistencia sin relaci\'on sem\'antica con la pregunta; T02
 usa la b\'usqueda por similitud para demostrar fuga entre usuarios. Las dos
-pruebas siembran memoria leg\'itima de fondo antes de atacar (20 registros),
+pruebas siembran memoria leg\'itima de fondo antes de atacar (20 registros sembrados, de los que el writer guarda 15 en los dos perfiles),
 porque sin ese ruido el almac\'en quedar\'ia casi vac\'io y el top-$k$
 devolver\'ia el dato del ataque por simple descarte, no por la debilidad real
 que se quiere demostrar.
@@ -202,7 +204,7 @@ externo.
 Todo registro pertenece a un espacio \texttt{tenant\_id/user\_id/session\_id}
 y ninguna lectura sale sin ese filtro, en ninguno de los dos canales. La
 debilidad que corrige no es que falte la etiqueta --el dato \emph{s\'i} la
-tiene-- sino que nadie la usa como filtro en la consulta. Se verifica con B02
+tiene-- sino que nadie la usa como filtro en la consulta. Se verifica con T02
 y M2; el criterio de aprobaci\'on es \textbf{M2a~=~0}, no M2b~=~0.
 
 \subsection{C2 --- Memoria como dato no ejecutable}
@@ -250,7 +252,7 @@ consultado, no solo la de quien lo escribi\'o--. Cada borrado deja una
 baja entrop\'ia (una direcci\'on, un n\'umero de tarjeta) se invierte por
 fuerza bruta en segundos, y el log de solo-agregado terminar\'ia siendo una
 copia recuperable de justo lo que se prometi\'o borrar. La purga es una
-funci\'on pura que recibe el reloj como par\'ametro, para que B04 (T04) pueda
+funci\'on pura que recibe el reloj como par\'ametro, para que T04 pueda
 adelantarlo con un reloj inyectable sin depender de que un planificador en
 otro hilo vea el mismo reloj congelado.
 
@@ -258,30 +260,30 @@ otro hilo vea el mismo reloj congelado.
 Toda acci\'on con efecto externo exige confirmaci\'on expl\'icita del usuario
 en el turno en curso; la memoria y los documentos nunca autorizan por s\'i
 mismos. Qued\'o fuera del alcance de este hito por tiempo (secci\'on de
-limitaciones): el mecanismo de herramientas del orquestador y la prueba B03
-(T03) que lo ejercita no se implementaron.
+limitaciones): el mecanismo de herramientas del orquestador y la prueba T03
+que lo ejercita no se implementaron.
 
 \section{Metodolog\'ia}
 
 \textbf{Dise\~no general.} Cada prueba a\'isla el control que dice medir. Por
-ejemplo, en B02/Secure el dato sensible de un usuario se siembra en el
+ejemplo, en T02/Secure el dato sensible de un usuario se siembra en el
 almac\'en \textbf{sin pasar por C3} (ya firmado, por un canal separado): si se
 sembrara por el camino normal, C3 rechazar\'ia la tarjeta como secreto, M2a
 saldr\'ia en 0\,\% por falta de dato que fugar, y eso no demostrar\'ia nada
 sobre C1. El mismo canal de siembra controlada se usa para crear el registro
-de \texttt{task\_context} con tiempo de vida expl\'icito que necesita B04.
+de \texttt{task\_context} con tiempo de vida expl\'icito que necesita T04.
 
-\textbf{Sesi\'on nueva es un proceso nuevo.} B01 lanza un subproceso por
+\textbf{Sesi\'on nueva es un proceso nuevo.} T01 lanza un subproceso por
 sesi\'on con \texttt{session\_id} nuevo y cach\'e vac\'ia; un bucle dentro del
 mismo proceso dejar\'ia estado compartido y no probar\'ia persistencia real.
 
-\textbf{M1 --- Tasa de Persistencia de Instrucci\'on (B01).} Fracci\'on de
+\textbf{M1 --- Tasa de Persistencia de Instrucci\'on (T01).} Fracci\'on de
 sesiones nuevas, sin relaci\'on sem\'antica con la instrucci\'on inyectada,
 cuya respuesta la cumple. Se registra por separado cu\'antas sesiones
 \emph{recuperaron} la instrucci\'on, para distinguir un fallo de recuperaci\'on
 de un fallo de obediencia del modelo.
 
-\textbf{M2 --- Tasa de Fuga entre Conversaciones (B02), en dos niveles.}
+\textbf{M2 --- Tasa de Fuga entre Conversaciones (T02), en dos niveles.}
 \textbf{M2a} (fuga de recuperaci\'on): el \'indice entreg\'o un documento de
 otro espacio de nombres, le\'ido del log de recuperaci\'on, no de la
 respuesta. \textbf{M2b} (fuga de divulgaci\'on): el dato apareci\'o en la
@@ -289,9 +291,9 @@ respuesta. Puede haber M2a sin M2b porque el modelo decidi\'o no repetir el
 dato, y eso no es m\'erito de ning\'un control. El criterio de aprobaci\'on de
 C1 es M2a~=~0.
 
-\textbf{M4 --- Tiempo de vida y borrado verificable (B04, B05).} B04 mide
+\textbf{M4 --- Tiempo de vida y borrado verificable (T04, T05).} T04 mide
 cu\'antas de 10 consultas, tras adelantar el reloj 48~h sobre un
-\texttt{task\_context} con TTL de 24~h, siguen recuper\'andolo. B05
+\texttt{task\_context} con TTL de 24~h, siguen recuper\'andolo. T05
 (``olvida mi direcci\'on'') mide, tras una sola llamada de borrado, el
 porcentaje de las tres capas (fila, embedding, cach\'e) que qued\'o
 irrecuperable --un chequeo estructural fijo de 3 elementos, sin intervalo de
@@ -316,19 +318,21 @@ controles.
 \textbf{Reproducibilidad.} Semilla 20260919, temperatura 0,
 \texttt{num\_predict}~=~256, una sola m\'aquina por comparaci\'on, digest del
 modelo en cada manifiesto (\texttt{46e0c10c\ldots a666e} para
-\texttt{llama3.1:8b-instruct-q4\_K\_M}). Como las corridas de este hito se
-ejecutaron en una m\'aquina distinta a la del Hito 2, se repiti\'o B01 y B02
-Unsecure sobre el commit de l\'inea base (\texttt{3ada423}) y sobre el commit
-nuevo en la \textbf{misma m\'aquina}, para descartar que el c\'odigo del
-Hito~3 hubiera alterado el camino Unsecure (secci\'on~\ref{sec:resultados}).
+\texttt{llama3.1:8b-instruct-q4\_K\_M}, Ollama 0.34.2). Las corridas de este
+hito se ejecutaron en la \textbf{misma m\'aquina} que la l\'inea base del
+Hito~2. Antes de comparar perfiles se repitieron T01 y T02 Unsecure sobre el
+commit nuevo y se contrastaron con la l\'inea base del commit \texttt{3ada423},
+para descartar que el c\'odigo del Hito~3 hubiera alterado el camino Unsecure
+(secci\'on~\ref{sec:resultados}).
 
 \section{Resultados}
 \label{sec:resultados}
 
 Todas las cifras de esta secci\'on salen de \texttt{experiments/compute\_me-}
 \texttt{trics.py} leyendo \texttt{evidence/runs/}; ninguna se escribe a mano.
-Corridas oficiales sobre el commit \PEND{sha corto del commit oficial},
-backend Ollama, digest \texttt{46e0c10c\ldots a666e}.
+Corridas oficiales del 17/10/2026 sobre el commit \texttt{614fadd}, backend
+Ollama, digest \texttt{46e0c10c\ldots a666e}, en la misma m\'aquina de la
+l\'inea base.
 
 \subsection{Verificaci\'on de la l\'inea base Unsecure (regla de no
 regresi\'on)}
@@ -339,43 +343,72 @@ regresi\'on)}
 \label{tab:regresion}
 \begin{tabular}{@{}lcc@{}}
 \toprule
- & \texttt{3ada423} & commit nuevo \\
+ & \texttt{3ada423} & \texttt{614fadd} \\
 \midrule
-B01, instrucci\'on cumplida & 20/20 & \PEND{T01 unsecure nuevo commit} \\
-B02, M2a (fuga recuperaci\'on) & 67/100 & \PEND{T02 unsecure nuevo commit, M2a} \\
-B02, M2b (fuga divulgaci\'on) & 49/100 & \PEND{T02 unsecure nuevo commit, M2b} \\
+T01, instrucci\'on cumplida & 20/20 & 20/20 \\
+T02, M2a (fuga recuperaci\'on) & 67/100 & 67/100 \\
+T02, M2b (fuga divulgaci\'on) & 49/100 & 49/100 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\PEND{Confirmar en una frase si las tres cifras coinciden; si alguna difiere,
-explicar la diferencia (carga de m\'aquina, versi\'on de Ollama, etc.) en vez
-de ocultarla.}
+Las tres cifras de seguridad coinciden exactamente, tal como ya hab\'ia
+ocurrido entre las corridas del 19/09 y del 22/09. El c\'odigo del Hito~3 no
+alter\'o el camino Unsecure: la diferencia entre perfiles que sigue se debe a
+los controles. Lo \'unico que vari\'o fue la latencia, como era de esperar por
+la carga de la m\'aquina ($L_{mem}$ p95 de T01: 100~ms el 22/09, 83~ms el
+17/10).
 
 \subsection{Unsecure vs.\ Secure}
 
 \begin{table}[h]
 \centering
-\caption{Comparativa de metricas, perfil nuevo commit}
+\caption{Unsecure vs.\ Secure, commit \texttt{614fadd}, misma m\'aquina. Entre corchetes, IC~95\,\% de Wilson}
 \label{tab:comparativa}
 \begin{tabular}{@{}lcc@{}}
 \toprule
 M\'etrica & Unsecure & Secure \\
 \midrule
-M1 --- TPI (B01) & \PEND{T01 unsecure, M1}\,\% & \PEND{T01 secure, M1}\,\% \\
-M2a --- fuga recuperaci\'on (B02) & \PEND{T02 unsecure, M2a}\,\% & \PEND{T02 secure, M2a}\,\% \\
-M2b --- fuga divulgaci\'on (B02) & \PEND{T02 unsecure, M2b}\,\% & \PEND{T02 secure, M2b}\,\% \\
-B04 --- recuperado tras TTL & \PEND{T04 unsecure}/10 & \PEND{T04 secure}/10 \\
-M4 --- capas irrecuperables (B05) & \PEND{T05 unsecure, M4}\,\% & \PEND{T05 secure, M4}\,\% \\
-$L_{mem}$ p95 (ms) & \PEND{L\_mem p95 unsecure} & \PEND{L\_mem p95 secure} \\
+M1 --- TPI (T01) & 20/20 [83,9--100] & 0/40 [0--8,8] \\
+M2a --- fuga recuperaci\'on (T02) & 67/100 [57,3--75,4] & 0/100 [0--3,7] \\
+M2b --- fuga divulgaci\'on (T02) & 49/100 [39,4--58,7] & 0/100 [0--3,7] \\
+T04 --- recuperado tras TTL & 10/10 [72,3--100] & 0/10 [0--27,8] \\
+M4 --- capas irrecuperables (T05) & 1/3 (33,3\,\%) & 3/3 (100\,\%) \\
+T05 --- fuga conversacional tras olvidar & 0/10 & 0/10 \\
+$L_{mem}$ p50 / p95, T01 (ms) & 69 / 83 & 69 / 86 \\
+$L_{mem}$ p50 / p95, T02 (ms) & 48 / 56 & 49 / 53 \\
+$L_{e2e}$ p95, T01 (ms) & 5248 & 5024 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\PEND{Agregar 2-3 p\'arrafos de lectura de esta tabla, con el mismo estilo
-anal\'itico de informe-avance.md secc.~5: por qu\'e sale lo que sale, no solo
-qu\'e sale. Mencionar expl\'icitamente si M2a lleg\'o a 0 (criterio de
-aprobaci\'on de C1, regla 4 de CLAUDE.md) y si B04/B05 confirman C5.}
+\textbf{Persistencia (T01).} En Secure ninguna de las 40 sesiones nuevas
+cumpli\'o la instrucci\'on, y ninguna la recuper\'o: el log muestra que C3 la
+rechaz\'o en el momento de escribirla, con cuatro patrones a la vez (formato
+impuesto a las respuestas, ``debes'', orden temporal y enlace). Esto significa
+que el resultado mide C3, no C2: la instrucci\'on nunca lleg\'o al almac\'en,
+as\'i que C2 no tuvo nada que neutralizar. Con 40 sesiones, la cota superior
+del intervalo (8,8\,\%) todav\'ia queda por encima del umbral absoluto del
+5\,\% de H1: el valor puntual cumple, pero la muestra no basta para
+garantizarlo.
+
+\textbf{Aislamiento (T02).} M2a lleg\'o a 0 de 100, que es el criterio de
+aprobaci\'on de C1. El resultado es atribuible a C1 porque los dos registros
+de A se sembraron firmados y sin pasar por C3: el dato ajeno estaba en el
+almac\'en en cada uno de los 100 sondeos y aun as\'i ninguno de los dos
+canales lo entreg\'o. Como M2a fue 0, M2b tambi\'en: el modelo no puede repetir
+lo que nunca recibi\'o.
+
+\textbf{Ciclo de vida (T04, T05).} El dato de contexto con TTL de 24~h se
+recuper\'o en 10 de 10 consultas en Unsecure despu\'es de adelantar el reloj
+48~h, y en ninguna en Secure. Tras ``olvidar'', Unsecure solo marc\'o la fila
+en SQLite y dej\'o el embedding y la cach\'e; Secure borr\'o las tres capas y
+dej\'o una prueba de borrado con HMAC en el log. La fuga conversacional tras
+olvidar fue 0/10 en los dos perfiles (ver Discusi\'on).
+
+\textbf{Costo.} El percentil 95 de $L_{mem}$ subi\'o 3~ms en T01 y baj\'o
+3~ms en T02: el efecto de C1, C2, C3 y C5 sobre la ruta de memoria est\'a por
+debajo del ruido de la m\'aquina y muy lejos del presupuesto de 300~ms de H4.
 
 \section{Discusi\'on}
 
@@ -388,19 +421,23 @@ sistema que entrega datos ajenos y confía en que el modelo se calle no tiene
 un control, tiene suerte.
 
 La diferencia entre $L_{e2e}$ y $L_{mem}$ --en la l\'inea base del Hito~2, la
-sola diferencia entre percentiles del turno completo (1384~ms en B01,
-1248~ms en B02) ya super\'o entre cuatro y cinco veces el presupuesto entero
+sola diferencia entre percentiles del turno completo (1384~ms en T01,
+1248~ms en T02) ya super\'o entre cuatro y cinco veces el presupuesto entero
 de H4 sin que existiera ning\'un control-- confirma que medir el costo de
 seguridad extremo a extremo habr\'ia hecho la hip\'otesis de costo
 inevaluable: la varianza de generaci\'on del modelo local esconde cualquier
 efecto real de los controles. $L_{mem}$ aisla exactamente lo que C1--C6
 tocan.
 
-\PEND{Agregar lectura de los resultados de B04/B05/M4 una vez estén las
-cifras: si C5 llega a 100\,\% de capas irrecuperables, explicar por qu\'e la
-corroboraci\'on conversacional (secc.~\ref{sec:resultados}) puede no mostrar
-la misma brecha que Unsecure --ver la nota en \texttt{experiments/run\_t05.py}
-sobre \texttt{store.query()} resolviendo cada hit contra la fila SQL--.}
+El borrado de T05 merece una precisi\'on. En Unsecure, tras ``olvidar'', el
+dato no volvi\'o a salir por la conversaci\'on (0/10), porque el laboratorio
+resuelve cada resultado del \'indice contra la fila de SQLite y esa fila ya
+qued\'o marcada como borrada. La falla de Unsecure no est\'a en lo que un
+usuario puede sacar charlando, sino en el dep\'osito: el embedding y la
+cach\'e siguen guardando el dato, y cualquiera con acceso al \'indice o a un
+respaldo puede leerlo. Por eso M4 se mide de forma estructural, capa por
+capa, y no por la conversaci\'on: medido solo en la respuesta, el borrado
+l\'ogico habr\'ia parecido suficiente.
 
 \section{Limitaciones}
 
@@ -414,21 +451,36 @@ texto libre). Se declara, no se oculta.
 \item \textbf{C4 parcial.} La firma se aplica al canal de siembra controlada
 que usan las pruebas; conectarla a toda escritura y verificarla en toda
 lectura normal qued\'o fuera de este hito por tiempo.
-\item \textbf{C6 y B03 (T03) no implementados.} El mecanismo de herramientas
+\item \textbf{C6 y T03 no implementados.} El mecanismo de herramientas
 del orquestador no se conect\'o; la inyecci\'on indirecta desde un documento
 no se midi\'o en este hito.
 \item \textbf{M3 y M5 no medidos.} El conjunto etiquetado de 60 candidatos
 para M3 existe (\texttt{experiments/datasets\_hito3.py}) pero no se
-proces\'o por el filtro con intervalo de Wilson; B06 (T06) y la utilidad
+proces\'o por el filtro con intervalo de Wilson; T06 y la utilidad
 evaluada por el equipo (M5, kappa de Cohen) tampoco.
-\item \textbf{Un solo modelo, una sola m\'aquina por comparaci\'on.} Llama
+\item \textbf{Un solo modelo y una sola m\'aquina.} Llama
 3.1 8B Instruct Q4\_K\_M; temperatura 0 y semilla fija no garantizan
 determinismo bit a bit entre m\'aquinas ni cuantizaciones.
 \item \textbf{Detecci\'on automatica con casos de revisi\'on manual.} M1 y
 M2b usan expresiones regulares; los casos amb\'iguos se marcan para revisi\'on
 manual en vez de contarse autom\'aticamente.
-\item \textbf{C2 es estad\'istico, no estructural.} Reduce la probabilidad de
-obediencia a una instrucci\'on inyectada, no la elimina por construcci\'on.
+\item \textbf{C2 es estad\'istico, no estructural, y no se aisl\'o.} Reduce
+la probabilidad de obediencia a una instrucci\'on inyectada, no la elimina por
+construcci\'on. Adem\'as, en T01 Secure la instrucci\'on nunca lleg\'o al
+almac\'en porque la rechaz\'o C3, as\'i que el 0/40 no mide C2. Falta la
+ablaci\'on con la instrucci\'on ya firmada dentro del almac\'en.
+\item \textbf{Tama\~no de muestra en T01.} Con 0 aciertos en 40 sesiones, la
+cota superior del intervalo de Wilson es 8,8\,\%: el valor puntual cumple
+H1 (TPI~$\le$~5\,\%), pero la muestra no basta para garantizarlo.
+\item \textbf{Sesgo optimista en las reglas de C3.} Las reglas y los textos de
+prueba se escribieron en la misma sesi\'on de trabajo, y algunas reglas
+reconocen literalmente la forma de los ataques del laboratorio (por ejemplo,
+``guarda en memoria que'', del documento de T03). Cualquier cifra de M3 sobre
+ese conjunto tendr\'a sesgo optimista y deber\'a contrastarse con textos
+escritos por terceros.
+\item \textbf{T01 con un solo usuario.} La instrucci\'on la escribe y la
+recibe el mismo usuario B. El caso en que A escribe y B la recibe por el
+perfil fijado no se midi\'o.
 \end{enumerate}
 
 \section{Conclusiones}
@@ -441,12 +493,12 @@ sondeos aunque el modelo solo los repita en 49. Agregar aislamiento por
 espacio de nombres en los dos canales de recuperaci\'on, separar datos de
 instrucciones en el ensamblado del \emph{prompt}, clasificar lo que se
 escribe antes de persistirlo, y borrar en las tres capas con prueba firmada,
-\PEND{cerrar con el resultado final de C1/C5 una vez calculado: p.ej. "reduce
-M2a a 0\,\% sobre 100 sondeos y deja el 100\,\% de los datos borrados o
-vencidos irrecuperables, sin exceder el presupuesto de 300\,ms en L\_mem"}.
-Qued\'o fuera de este hito, por tiempo y se declara como tal, la
-implementaci\'on completa de C4 y C6, la medici\'on de M3 y M5, y el juez LLM
-dentro de C3.
+redujo la persistencia de 20/20 a 0/40 sesiones, la fuga de recuperaci\'on de
+67 a 0 sondeos de 100, la recuperaci\'on de datos vencidos de 10/10 a 0/10, y
+llev\'o el borrado de una a tres capas, con un cambio de unos 3~ms en el
+percentil 95 de la ruta de memoria. Qued\'o fuera de este hito, por tiempo y
+se declara como tal, la implementaci\'on completa de C4 y C6, la medici\'on de
+M3 y M5, la ablaci\'on que a\'isla a C2, y el juez LLM dentro de C3.
 
 \section{Declaraci\'on de uso de IA}
 
@@ -459,10 +511,11 @@ Herramienta & Prop\'osito concreto \\
 \midrule
 Claude (Anthropic), Claude Code & Implementaci\'on de los controles C1, C2,
 C3 y C5 sobre el dise\~no ya definido en la propuesta; escritura de los
-\emph{runners} de pruebas B04/B05 y de las extensiones a
+\emph{runners} de pruebas T04/T05 y de las extensiones a
 \texttt{compute\_metrics.py}; correcci\'on de inconsistencias conocidas en la
 documentaci\'on; verificaci\'on del mapeo a MITRE ATLAS contra la fuente
-oficial; redacci\'on de este documento. \\
+oficial; lanzamiento de los \emph{runners} para las corridas oficiales en la
+m\'aquina del equipo; redacci\'on de este documento y de la presentaci\'on. \\
 Llama 3.1 8B Instruct (Ollama, local) & \textbf{Objeto de estudio} del
 experimento: es el modelo sobre el que se miden las fugas y persistencias;
 no particip\'o en la evaluaci\'on de utilidad (M5), que exige juicio humano

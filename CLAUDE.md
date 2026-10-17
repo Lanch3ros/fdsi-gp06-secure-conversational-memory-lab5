@@ -16,7 +16,7 @@ que mide cuánto reducen eso seis controles de seguridad (C1–C6).
   García Zapata. Repo de Sofía (`sofiapeace`).
 - Modelo objeto de estudio: Llama 3.1 8B Instruct Q4_K_M en Ollama, local.
 
-## Estado al 16/10/2026
+## Estado al 17/10/2026
 
 - **Hito 1** (propuesta v2) y **Hito 2** (laboratorio Unsecure, T01 y T02 con
   evidencia, M1 y M2 de línea base) entregados.
@@ -27,9 +27,16 @@ que mide cuánto reducen eso seis controles de seguridad (C1–C6).
   del cronograma de la propia propuesta: controles C1–C6 implementados, T01–T06 en
   los dos perfiles, comparativa M1–M5, paper IEEE, presentación y demo. Hay que
   decir explícitamente en el entregable que el alcance es inferido.
-- **Perfil `secure` hoy:** C2, C3, C5 y C6 lanzan `NotImplementedError` a propósito.
-  El filtro de C1 ya está escrito en `retriever.py` pero nunca se ha medido. Las
-  funciones HMAC de C4 existen en `provenance.py` pero no están conectadas.
+- **Perfil `secure` (17/10/2026):** C1, C2, C3 (solo reglas) y C5 implementados.
+  C4 a medias: firma lo que entra por `seed_memory(bypass_c3=True)`, pero nada
+  verifica la firma al leer. C6 sigue lanzando `NotImplementedError`.
+- **Corridas oficiales del Hito 3** (17/10, commit `614fadd`, Mac de Jose, la misma
+  máquina de la línea base): Unsecure repitió 20/20, 67 y 49. Secure: T01 0/40,
+  M2a 0/100, M2b 0/100, T04 0/10 (Unsecure 10/10), M4 3 de 3 capas (Unsecure 1 de 3),
+  `L_mem` p95 de T01 86 ms (Unsecure 83 ms). El 0/40 de T01 lo produce C3: la
+  instrucción nunca se guardó, así que C2 no se midió por separado.
+- Pendiente después del Hito 3: C4 completo, C6 y T03, M3, T06 y M5, la ablación
+  de C2, la variante A → B de T01 y el juez LLM de C3.
 
 ## Mapa del código
 
@@ -62,7 +69,7 @@ interfaz es la CLI `memlab` (`info`, `seed`, `ask`, `chat`).
 
 ```bash
 make setup                    # requiere uv y Python 3.11
-make test                     # 14 tests, segundos, sin modelo
+make test                     # 30 tests, segundos, sin modelo
 export MEMLAB_LLM=stub        # para desarrollar sin Ollama (el .env NO se carga solo)
 make t01 PROFILE=secure N_T01=40
 make t02 PROFILE=secure
@@ -127,7 +134,10 @@ Ollama corriendo.
   No afirmar el caso A → B como resultado mientras no se mida.
 - La propuesta (§9) y las figuras mencionan FastAPI, Streamlit, LangChain/LangGraph,
   JWT, SQLCipher y OpenTelemetry. **Nada de eso existe en el código.**
-- La Figura 1 dice que ChromaDB no guarda `tenant_id`/`user_id`: **falso**, sí los
-  guarda (`schema.to_metadata`). La falla es que la consulta no los usa como filtro.
-- La debilidad ⑤ de la Figura 1 ("sin observabilidad") choca con el log de
-  auditoría del laboratorio. El log es instrumento del experimento, no un control.
+- ChromaDB **sí** guarda `tenant_id`/`user_id` (`schema.to_metadata`); la falla es
+  que la consulta no los usa como filtro. La Figura 1 ya lo dice así desde el 17/10.
+- El log de auditoría del laboratorio es instrumento del experimento, no un
+  control (debilidad ⑤ de la Figura 1, corregida el 17/10).
+- T05: tras "olvidar", el chat no devuelve el dato en **ninguno** de los dos
+  perfiles (0/10). La falla de Unsecure es que el embedding y la caché siguen
+  guardándolo. No decir que "vuelve a salir en el chat".

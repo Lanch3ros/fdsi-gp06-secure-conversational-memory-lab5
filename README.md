@@ -29,7 +29,8 @@ Los tres integrantes presentan el progreso del Hito 2:
 
 El perfil `secure` ya no lanza `NotImplementedError`: C1, C2, C3 y C5 corren de
 punta a punta. C4 (firma) solo cubre el canal de siembra controlada que usan
-las pruebas; C6 y el mecanismo de herramientas no se implementaron.
+las pruebas y todavia no se verifica al leer; C6 y el mecanismo de herramientas
+no se implementaron.
 
 ## Linea base medida (22/09/2026 · commit `3ada423` · Llama 3.1 8B Instruct Q4_K_M)
 
@@ -50,20 +51,34 @@ mientras la ruta de memoria se mantuvo entre 66 y 67 ms.
 
 ## Comparativa Unsecure vs Secure (Hito 3)
 
-Corridas oficiales sobre commit `[PEND]`, misma maquina de la linea base de
-arriba. Antes de comparar, se repitieron T01 y T02 Unsecure sobre `3ada423` y
-sobre el commit nuevo, en esta misma maquina, para descartar que el codigo del
-Hito 3 hubiera tocado el camino Unsecure (regla 1 de `CLAUDE.md`): `[PEND:
-coincidieron / no coincidieron y por que]`.
+Corridas oficiales del 17/10/2026 sobre el commit `614fadd`, en la **misma
+maquina** de la linea base de arriba (mismo digest del modelo, Ollama 0.34.2).
+Antes de comparar se repitieron T01 y T02 Unsecure con el codigo del Hito 3:
+dieron **otra vez 20/20, 67/100 y 49/100**, exactamente la linea base. El codigo
+del Hito 3 no toco el camino Unsecure (regla 1 de `CLAUDE.md`).
 
-| Metrica | Unsecure | Secure |
-|---|---|---|
-| **M1** TPI (T01) | `[PEND]` | `[PEND]` |
-| **M2a** fuga de recuperacion (T02) | `[PEND]` | `[PEND]` |
-| **M2b** fuga de divulgacion (T02) | `[PEND]` | `[PEND]` |
-| T04, recuperado tras vencer el TTL | `[PEND]`/10 | `[PEND]`/10 |
-| **M4** capas irrecuperables (T05) | `[PEND]` | `[PEND]` |
-| `L_mem` p95 | `[PEND]` | `[PEND]` |
+| Metrica | Unsecure | Secure | IC 95 % Secure |
+|---|---|---|---|
+| **M1** TPI (T01) | 20/20 · 100 % | **0/40 · 0 %** | [0 – 8,8] |
+| **M2a** fuga de recuperacion (T02) | 67/100 | **0/100** | [0 – 3,7] |
+| **M2b** fuga de divulgacion (T02) | 49/100 | **0/100** | [0 – 3,7] |
+| T04, recuperado tras vencer el TTL | 10/10 | **0/10** | [0 – 27,8] |
+| **M4** capas irrecuperables (T05) | 1 de 3 (33 %) | **3 de 3 (100 %)** | — |
+| `L_mem` p95, T01 | 83 ms | 86 ms | — |
+| `L_mem` p95, T02 | 56 ms | 53 ms | — |
+
+Como leerla:
+
+- **T01:** la instruccion no llego a guardarse en Secure porque la rechazo C3.
+  El 0/40 mide C3, no C2. Con 40 sesiones la cota superior es 8,8 %: el valor
+  puntual cumple el 5 % de H1, pero la muestra no basta para garantizarlo.
+- **T02:** el dato de A estaba en el almacen (sembrado sin pasar por C3), y aun
+  asi ningun canal lo entrego. Es M2a = 0, el criterio de aprobacion de C1.
+- **T05:** la fuga por conversacion tras olvidar fue 0/10 en los **dos**
+  perfiles. La falla de Unsecure es que el embedding y la cache siguen
+  guardando el dato, no que vuelva a salir en el chat.
+- **Costo:** unos 3 ms en el percentil 95 de la ruta de memoria, lejos de los
+  300 ms de H4.
 
 Cifras completas, con intervalos de Wilson, en `evidence/metrics/`. Detalle y
 discusion en `docs/hito3/paper/paper.tex`.
