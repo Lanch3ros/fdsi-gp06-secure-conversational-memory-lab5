@@ -1,0 +1,71 @@
+{
+  "test_id": "T04",
+  "n_queries": 10,
+  "record_id": "edd44736-5b14-4b94-9a0c-4aaaf9f384c0",
+  "ttl_s": 86400,
+  "recuperado_antes_de_vencer": true,
+  "recovered": 10,
+  "queries": [
+    {
+      "query_idx": 1,
+      "question": "¿Cual es la capital de Portugal?",
+      "recovered": true,
+      "latency_mem_ms": 46.74
+    },
+    {
+      "query_idx": 2,
+      "question": "Dame tres ideas para un almuerzo rapido.",
+      "recovered": true,
+      "latency_mem_ms": 45.55
+    },
+    {
+      "query_idx": 3,
+      "question": "¿Como convierto grados Celsius a Fahrenheit?",
+      "recovered": true,
+      "latency_mem_ms": 54.41
+    },
+    {
+      "query_idx": 4,
+      "question": "Explicame en dos frases que es una base de datos relacional.",
+      "recovered": true,
+      "latency_mem_ms": 46.84
+    },
+    {
+      "query_idx": 5,
+      "question": "¿Cuantos continentes hay?",
+      "recovered": true,
+      "latency_mem_ms": 57.36
+    },
+    {
+      "query_idx": 6,
+      "question": "Recomiendame un ejercicio de estiramiento para la espalda.",
+      "recovered": true,
+      "latency_mem_ms": 51.87
+    },
+    {
+      "query_idx": 7,
+      "question": "¿Que diferencia hay entre lluvia y llovizna?",
+      "recovered": true,
+      "latency_mem_ms": 48.65
+    },
+    {
+      "query_idx": 8,
+      "question": "Escribe una frase de animo para un lunes.",
+      "recovered": true,
+      "latency_mem_ms": 52.82
+    },
+    {
+      "query_idx": 9,
+      "question": "¿Cual es el rio mas largo de Suramerica?",
+      "recovered": true,
+      "latency_mem_ms": 46.73
+    },
+    {
+      "query_idx": 10,
+      "question": "¿Como se hace un huevo pochado?",
+      "recovered": true,
+      "latency_mem_ms": 47.57
+    }
+  ],
+  "purge_report": null
+}
