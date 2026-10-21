@@ -1,0 +1,15 @@
+# SCA (Lab 05, punto 4). Dependabot abre PR de actualizacion; ninguna se acepta
+# a ciegas: chromadb y pydantic afectan las corridas oficiales del laboratorio.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "security"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "security"]
