@@ -182,6 +182,21 @@ class MemoryStore:
     def cache_contains(self, needle: str) -> bool:
         return any(needle in item for items in self.session_cache.values() for item in items)
 
+    def purge_content_from_cache(self, content: str) -> bool:
+        """Borrado real de la capa 3 (C5), por contenido y no por session_id.
+
+        Una fila se recupera desde la sesion de quien pregunta, no solo desde
+        la del dueno: su contenido puede haber quedado cacheado bajo varios
+        session_id distintos (cualquiera que lo haya recuperado). Vaciar solo
+        la cache del session_id de origen deja copias vivas en las demas.
+        """
+        removed = False
+        for key, items in list(self.session_cache.items()):
+            if content in items:
+                self.session_cache[key] = [i for i in items if i != content]
+                removed = True
+        return removed
+
     # ---------------------------------------------------------------- interno
 
     def _row_to_record(self, row: sqlite3.Row) -> MemoryRecord:

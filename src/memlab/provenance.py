@@ -17,7 +17,26 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .schema import MemoryRecord
+
+
+def record_payload(record: "MemoryRecord") -> dict[str, Any]:
+    """Subconjunto estable del registro que se firma y se verifica (C4).
+
+    No incluye la firma misma (evitaria la circularidad) ni session_id, que
+    puede cambiar legitimamente sin que el contenido del registro cambie.
+    """
+    return {
+        "record_id": record.record_id,
+        "tenant_id": record.tenant_id,
+        "user_id": record.user_id,
+        "kind": record.kind.value,
+        "content": record.content,
+        "created_at": record.created_at.isoformat(),
+    }
 
 
 def canonical(record: dict[str, Any]) -> bytes:

@@ -23,11 +23,13 @@ from .audit import AuditLog
 from .clock import Clock, SystemClock
 from .config import Settings
 from .llm import build_llm
+from .memory.lifecycle import Lifecycle
 from .memory.retriever import MemoryRetriever, Retrieved
 from .memory.store import MemoryStore
 from .memory.writer import build_writer
 from .prompt import build_messages
-from .schema import Source
+from .provenance import sign
+from .schema import DEFAULT_TTL_S, MemoryKind, MemoryRecord, Provenance, Source
 
 
 @dataclass
@@ -66,6 +68,9 @@ class Orchestrator:
             self.store, is_secure=settings.is_secure, k=settings.retrieval_k
         )
         self.writer = build_writer(settings.is_secure)
+        self.lifecycle = Lifecycle(
+            self.store, is_secure=settings.is_secure, audit=audit, hmac_key=settings.hmac_key
+        )
         self.llm = build_llm(settings)
 
     def turn(self, user_id: str, session_id: str, text: str) -> TurnResult:
@@ -74,10 +79,17 @@ class Orchestrator:
 
         # --- recuperacion -------------------------------------------------
         t0 = time.perf_counter()
+        now = self.clock.now()
         retrieved = self.retriever.retrieve(
-            text, tenant_id=self.settings.tenant_id, user_id=user_id
+            text, tenant_id=self.settings.tenant_id, user_id=user_id, now=now
         )
-        messages = build_messages(text, retrieved, is_secure=self.settings.is_secure)
+        messages = build_messages(
+            text,
+            retrieved,
+            is_secure=self.settings.is_secure,
+            session_id=session_id,
+            hmac_key=self.settings.hmac_key,
+        )
         mem_ms += (time.perf_counter() - t0) * 1000
 
         self.audit.emit(
@@ -158,13 +170,37 @@ class Orchestrator:
         )
 
     def seed_memory(
-        self, user_id: str, session_id: str, text: str, *, source: Source = Source.USER_TURN
+        self,
+        user_id: str,
+        session_id: str,
+        text: str,
+        *,
+        source: Source = Source.USER_TURN,
+        bypass_c3: bool = False,
+        kind: MemoryKind = MemoryKind.FACT,
+        pinned: bool = False,
+        ttl_s: int | None = None,
     ) -> str | None:
         """Escribe en memoria sin gastar un turno del modelo.
 
         T02 la usa para sembrar el dato de A: lo que se mide ahi es la
         recuperacion desde B, no lo que el modelo le conteste a A.
+
+        `bypass_c3=True` entra DIRECTO al almacen, firmado, sin pasar por
+        MemoryWriter.consider(). Es el canal que pide la regla 7 de
+        CLAUDE.md: en Secure, el dato de A en T02 (una tarjeta) tiene que
+        quedar sembrado para medir C1 (namespacing en recuperacion) sin que
+        C3 lo rechace primero como secreto -si lo rechazara, M2a saldria 0
+        por falta de dato que fugar, no porque el filtro de C1 funcione, y
+        eso no demostraria nada-. El mismo canal sirve para crear un
+        task_context con TTL explicito (T04): clasificar eso desde texto
+        libre es fragil y ninguna prueba de la prioridad P1 lo necesita.
         """
+        if bypass_c3:
+            return self._seed_signed(
+                user_id, session_id, text, source=source, kind=kind, pinned=pinned, ttl_s=ttl_s
+            )
+
         verdict = self.writer.consider(
             text,
             tenant_id=self.settings.tenant_id,
@@ -186,6 +222,57 @@ class Orchestrator:
             return verdict.record.record_id
         self.audit.emit("seed_rejected", user_id=user_id, text=text, reason=verdict.reason)
         return None
+
+    def _seed_signed(
+        self,
+        user_id: str,
+        session_id: str,
+        text: str,
+        *,
+        source: Source,
+        kind: MemoryKind,
+        pinned: bool,
+        ttl_s: int | None,
+    ) -> str:
+        clean = text.strip()
+        effective_ttl = ttl_s if ttl_s is not None else DEFAULT_TTL_S[kind]
+        record = MemoryRecord(
+            tenant_id=self.settings.tenant_id,
+            user_id=user_id,
+            session_id=session_id,
+            kind=kind,
+            content=clean,
+            created_at=self.clock.now(),
+            ttl_s=effective_ttl,
+            pinned=pinned,
+            provenance=Provenance(
+                source=source, author_user_id=user_id, session_id=session_id, signature=None
+            ),
+        )
+        payload = {
+            "record_id": record.record_id,
+            "tenant_id": record.tenant_id,
+            "user_id": record.user_id,
+            "kind": record.kind.value,
+            "content": record.content,
+            "created_at": record.created_at.isoformat(),
+        }
+        signature = sign(payload, self.settings.hmac_key)
+        record = record.model_copy(
+            update={"provenance": record.provenance.model_copy(update={"signature": signature})}
+        )
+        self.store.add(record)
+        self.audit.emit(
+            "seed_signed",
+            user_id=user_id,
+            session_id=session_id,
+            record_id=record.record_id,
+            kind=record.kind.value,
+            pinned=record.pinned,
+            ttl_s=record.ttl_s,
+            content=record.content,
+        )
+        return record.record_id
 
     def fingerprint(self) -> dict[str, Any]:
         return self.llm.fingerprint()

@@ -1,0 +1,40 @@
+{
+  "metric": "M4 - Tasa de Borrado Verificable (TBV)",
+  "test_id": "T05",
+  "profile": "secure",
+  "m4_capas_irrecuperables_pct": 100.0,
+  "capas": {
+    "row_gone": true,
+    "embedding_gone": true,
+    "cache_gone": true,
+    "complete": true
+  },
+  "fuga_conversacional_tras_olvidar": {
+    "hits": 0,
+    "n": 10,
+    "pct": 0.0,
+    "ci95": [
+      0.0,
+      27.75
+    ]
+  },
+  "umbral_propuesta": {
+    "unsecure": "< 100 % (fila oculta, embedding y cache sobreviven)",
+    "secure": "100 % (las tres capas)"
+  },
+  "nota": "la fuga conversacional puede salir en 0/10 en los dos perfiles: store.query() resuelve cada hit del indice contra la fila SQL y esa fila ya queda oculta con el borrado logico de Unsecure. El hueco de Unsecure esta en el deposito (fila+embedding siguen fisicamente ahi), no en lo que una conversacion normal saca de vuelta; la evidencia de ese hueco es 'capas', no esta fuga.",
+  "warnings": [],
+  "run": "20261017T161539Z-T05-secure-614fadd",
+  "git_sha": "614fadd",
+  "model": {
+    "model": "llama3.1:8b-instruct-q4_K_M",
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+    "size_bytes": 4920753328,
+    "modified_at": "2026-09-19T21:58:42.828033479-05:00",
+    "family": "llama",
+    "parameter_size": "8.0B",
+    "quantization_level": "Q4_K_M",
+    "context_length": 131072,
+    "ollama_version": "0.34.2"
+  }
+}

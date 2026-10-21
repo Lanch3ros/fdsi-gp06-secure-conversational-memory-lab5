@@ -10,7 +10,7 @@ ocurrir.
 ## Antes de grabar
 
 ```bash
-make test          # 11 pruebas en verde: la tuberia esta sana
+make test          # 14 pruebas en verde: la tuberia esta sana
 make info          # deja en pantalla el digest del modelo y el perfil activo
 rm -rf data        # laboratorio limpio
 ```

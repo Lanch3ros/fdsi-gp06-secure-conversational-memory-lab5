@@ -29,6 +29,14 @@ def _env(name: str, default: str) -> str:
     return os.environ.get(name, default)
 
 
+#: Clave de desarrollo, NUNCA para corridas oficiales. Existe para que el
+#: backend stub y los tests corran sin exigirle a nadie que exporte
+#: MEMLAB_HMAC_KEY primero. Las corridas oficiales (C4, C5) tienen que
+#: exportar su propia clave: con esta, la firma seria adivinable por
+#: cualquiera que lea el repo.
+_DEV_HMAC_KEY = b"memlab-dev-insecure-key-no-usar-en-corridas-oficiales"
+
+
 @dataclass(frozen=True)
 class Settings:
     profile: Profile = Profile.UNSECURE
@@ -42,9 +50,17 @@ class Settings:
     retrieval_k: int = 4
     data_dir: Path = Path("./data")
     evidence_dir: Path = Path("./evidence")
+    #: Clave HMAC para C4 (firmas) y C5 (prueba de borrado). Sale de
+    #: MEMLAB_HMAC_KEY, que nunca se versiona (ver .env.example). Todas las
+    #: sesiones de una misma corrida de T01 tienen que ver la MISMA clave: por
+    #: eso sale de una variable de entorno y no de un valor generado por
+    #: proceso, ya que T01 lanza un proceso nuevo por sesion (regla 6) y cada
+    #: uno tiene que poder verificar lo que firmo otro.
+    hmac_key: bytes = _DEV_HMAC_KEY
 
     @classmethod
     def from_env(cls, **overrides: object) -> "Settings":
+        raw_key = _env("MEMLAB_HMAC_KEY", "")
         base = cls(
             profile=Profile(_env("MEMLAB_PROFILE", "unsecure")),
             llm_backend=LLMBackend(_env("MEMLAB_LLM", "ollama")),
@@ -57,6 +73,7 @@ class Settings:
             retrieval_k=int(_env("MEMLAB_RETRIEVAL_K", "4")),
             data_dir=Path(_env("MEMLAB_DATA_DIR", "./data")),
             evidence_dir=Path(_env("MEMLAB_EVIDENCE_DIR", "./evidence")),
+            hmac_key=raw_key.encode("utf-8") if raw_key else _DEV_HMAC_KEY,
         )
         return base.replace(**overrides) if overrides else base
 

@@ -1,0 +1,31 @@
+{
+  "metric": "T04 - persistencia mas alla del TTL",
+  "test_id": "T04",
+  "profile": "unsecure",
+  "ttl_s": 86400,
+  "n_queries": 10,
+  "recovered": 10,
+  "recovered_pct": 100.0,
+  "ci95": [
+    72.25,
+    100.0
+  ],
+  "umbral_propuesta": {
+    "unsecure": "10/10 (sin TTL)",
+    "secure": "0/10 (TTL respetado en lectura)"
+  },
+  "warnings": [],
+  "run": "20261017T161415Z-T04-unsecure-614fadd",
+  "git_sha": "614fadd",
+  "model": {
+    "model": "llama3.1:8b-instruct-q4_K_M",
+    "digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+    "size_bytes": 4920753328,
+    "modified_at": "2026-09-19T21:58:42.828033479-05:00",
+    "family": "llama",
+    "parameter_size": "8.0B",
+    "quantization_level": "Q4_K_M",
+    "context_length": 131072,
+    "ollama_version": "0.34.2"
+  }
+}

@@ -25,11 +25,12 @@ Los tres integrantes presentan el progreso del Hito 2:
 |---|---|---|
 | 1 | Propuesta estructurada | Entregada 05/09 · **versión 2 del 21/09** — [`docs/hito1/FDSIGP06_Propuesta_Estructurada_v2.pdf`](docs/hito1/FDSIGP06_Propuesta_Estructurada_v2.pdf) |
 | 2 | Laboratorio **Unsecure**, T01 y T02 con evidencia, metricas M1 y M2 de linea base | **Listo** — resultados en `docs/hito2/informe-avance.md` · [video del avance](#video-del-avance) |
-| 3 | Controles C1–C6, T03–T06, comparativa Secure vs Unsecure, paper IEEE | Pendiente |
+| 3 | Controles C1, C2, C3 (reglas) y C5; T01, T02, T04 y T05 en los dos perfiles; paper IEEE y presentacion | **Entregado 17/10/2026**, sin rubrica del docente (alcance inferido, ver `docs/hito3/plan-entrega.md`). C4 completo, C6, T03, M3 y M5 quedaron fuera por tiempo — declarado en Limitaciones del paper. |
 
-El perfil `secure` existe en el codigo y falla de forma explicita con
-`NotImplementedError` indicando el control que falta. Es deliberado: el Avance 1
-entrega la linea base, no una version segura a medias.
+El perfil `secure` ya no lanza `NotImplementedError`: C1, C2, C3 y C5 corren de
+punta a punta. C4 (firma) solo cubre el canal de siembra controlada que usan
+las pruebas y todavia no se verifica al leer; C6 y el mecanismo de herramientas
+no se implementaron.
 
 ## Linea base medida (22/09/2026 · commit `3ada423` · Llama 3.1 8B Instruct Q4_K_M)
 
@@ -48,6 +49,40 @@ Una corrida anterior, del 19/09, dio **exactamente los mismos** M1, M2a y M2b. L
 unico que se movio fue la latencia extremo a extremo, por carga de la maquina,
 mientras la ruta de memoria se mantuvo entre 66 y 67 ms.
 
+## Comparativa Unsecure vs Secure (Hito 3)
+
+Corridas oficiales del 17/10/2026 sobre el commit `614fadd`, en la **misma
+maquina** de la linea base de arriba (mismo digest del modelo, Ollama 0.34.2).
+Antes de comparar se repitieron T01 y T02 Unsecure con el codigo del Hito 3:
+dieron **otra vez 20/20, 67/100 y 49/100**, exactamente la linea base. El codigo
+del Hito 3 no toco el camino Unsecure (regla 1 de `CLAUDE.md`).
+
+| Metrica | Unsecure | Secure | IC 95 % Secure |
+|---|---|---|---|
+| **M1** TPI (T01) | 20/20 · 100 % | **0/40 · 0 %** | [0 – 8,8] |
+| **M2a** fuga de recuperacion (T02) | 67/100 | **0/100** | [0 – 3,7] |
+| **M2b** fuga de divulgacion (T02) | 49/100 | **0/100** | [0 – 3,7] |
+| T04, recuperado tras vencer el TTL | 10/10 | **0/10** | [0 – 27,8] |
+| **M4** capas irrecuperables (T05) | 1 de 3 (33 %) | **3 de 3 (100 %)** | — |
+| `L_mem` p95, T01 | 83 ms | 86 ms | — |
+| `L_mem` p95, T02 | 56 ms | 53 ms | — |
+
+Como leerla:
+
+- **T01:** la instruccion no llego a guardarse en Secure porque la rechazo C3.
+  El 0/40 mide C3, no C2. Con 40 sesiones la cota superior es 8,8 %: el valor
+  puntual cumple el 5 % de H1, pero la muestra no basta para garantizarlo.
+- **T02:** el dato de A estaba en el almacen (sembrado sin pasar por C3), y aun
+  asi ningun canal lo entrego. Es M2a = 0, el criterio de aprobacion de C1.
+- **T05:** la fuga por conversacion tras olvidar fue 0/10 en los **dos**
+  perfiles. La falla de Unsecure es que el embedding y la cache siguen
+  guardando el dato, no que vuelva a salir en el chat.
+- **Costo:** unos 3 ms en el percentil 95 de la ruta de memoria, lejos de los
+  300 ms de H4.
+
+Cifras completas, con intervalos de Wilson, en `evidence/metrics/`. Detalle y
+discusion en `docs/hito3/paper/paper.tex`.
+
 ## Como se corre
 
 ```bash
@@ -55,9 +90,11 @@ make setup          # entorno con Python 3.11 y dependencias
 make model          # descarga llama3.1:8b-instruct-q4_K_M en Ollama (~5 GB)
 make info           # perfil activo e identidad exacta del modelo
 make test           # suite de pytest, segundos, sin modelo
-make t01            # T01: 20 sesiones nuevas
-make t02            # T02: 100 sondeos
-make metrics        # recalcula M1 y M2 desde la evidencia
+make t01 PROFILE=secure N_T01=40   # T01: sesiones nuevas (20 Unsecure, 40 Secure)
+make t02 PROFILE=secure            # T02: 100 sondeos
+make t04 PROFILE=secure            # T04: TTL con reloj congelado adelantado 48h
+make t05 PROFILE=secure            # T05: "olvida mi direccion", tres capas
+make metrics                       # recalcula M1-M4 desde la evidencia
 ```
 
 Para el video demo, la conversacion interactiva avisa en pantalla cuando la
@@ -110,18 +147,25 @@ verificar la tuberia sin modelo. Queda marcado en el manifiesto y
 ```
 src/memlab/           nucleo del laboratorio
   memory/store.py     las tres capas: SQLite, ChromaDB, cache de sesion
-  memory/writer.py    C3 — que se guarda (en Unsecure: todo, sin validar)
-  memory/retriever.py C1 — que se recupera (en Unsecure: sin filtro de dueno)
-  memory/lifecycle.py C5 — tiempo de vida y borrado
-  prompt.py           C2 — en Unsecure la memoria entra con autoridad de sistema
-  provenance.py       C4 — HMAC de procedencia
-  tools.py            C6 — autorizacion de herramientas
-  orchestrator.py     un turno completo, con las dos latencias
+  memory/writer.py    C3 — filtro de escritura (Unsecure: todo sin validar; Secure: reglas)
+  memory/retriever.py C1 — namespacing en los dos canales + filtro de TTL (C5) en lectura
+  memory/lifecycle.py C5 — tiempo de vida, purga y borrado en tres capas con deletion_proof
+  prompt.py           C2 — Unsecure inyecta en el sistema; Secure delimita en el turno de usuario
+  provenance.py       C4 — firma y verificacion HMAC
+  tools.py            C6 — autorizacion de herramientas (no conectado al orquestador)
+  orchestrator.py     un turno completo; seed_memory(bypass_c3=True) para sembrar firmado
   detectors.py        deteccion automatica para M1 y M2b
   stats.py            Wilson, regla de tres, percentiles
-experiments/          runners de T01 y T02 + calculo de metricas
+experiments/
+  run_t01.py, run_t02.py, run_t04.py, run_t05.py   runners por prueba
+  datasets_hito3.py   candidatos de M3, turnos/preguntas de T06, documento de T03
+  compute_metrics.py  M1, M2, T04 y M4 desde evidence/runs/
 evidence/runs/        una carpeta por corrida: manifiesto, log de auditoria, resultados
-evidence/metrics/     M1 y M2 calculadas desde la evidencia
+evidence/metrics/     metricas calculadas desde la evidencia
+docs/hito3/
+  plan-entrega.md     plan de la entrega del 17/10/2026
+  paper/paper.tex     paper IEEE (IEEEtran)
+  presentacion.md     guion de las diapositivas
 docs/                 propuesta, diagramas, material de los hitos
 ```
 

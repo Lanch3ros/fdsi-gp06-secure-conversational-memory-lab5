@@ -15,6 +15,7 @@ SECURE:   los dos filtran por tenant_id y user_id, siempre, sin excepcion.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from ..schema import MemoryRecord
 from .store import MemoryStore
@@ -59,18 +60,30 @@ class MemoryRetriever:
             return None
         return {"$and": [{"tenant_id": {"$eq": tenant_id}}, {"user_id": {"$eq": user_id}}]}
 
-    def retrieve(self, query: str, *, tenant_id: str, user_id: str) -> list[Retrieved]:
+    def retrieve(
+        self, query: str, *, tenant_id: str, user_id: str, now: datetime | None = None
+    ) -> list[Retrieved]:
+        """`now`: control C5 en lectura. Solo se evalua en Secure -en Unsecure
+        no hay purga ni filtro de vencimiento, por disenio (T04)-, y solo si se
+        recibe un reloj: las pruebas que no les importa la expiracion pueden
+        omitirlo y el comportamiento no cambia.
+        """
         out: list[Retrieved] = []
 
         sql_where = {"tenant_id": tenant_id, "user_id": user_id} if self.is_secure else None
         for rec in self.store.pinned_records(where=sql_where):
+            if self.is_secure and now is not None and rec.is_expired(now):
+                continue
             out.append(Retrieved(record=rec, channel="pinned"))
 
         seen = {r.record.record_id for r in out}
         where = self._namespace_filter(tenant_id, user_id)
         for rec, dist in self.store.query(query, k=self.k, where=where):
-            if rec.record_id not in seen:
-                out.append(Retrieved(record=rec, channel="similarity", distance=dist))
+            if rec.record_id in seen:
+                continue
+            if self.is_secure and now is not None and rec.is_expired(now):
+                continue
+            out.append(Retrieved(record=rec, channel="similarity", distance=dist))
         return out
 
 
