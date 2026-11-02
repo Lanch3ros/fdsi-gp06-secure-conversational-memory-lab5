@@ -41,7 +41,7 @@ C4/C5, que depende de que la clave HMAC no sea la de desarrollo (F-05).
 | CodeQL 2.27.3, Default setup (Python) | SAST | 21/10/2026 y 02/11/2026 | Suite `default`, amenazas `remote`: 43 reglas y 0 resultados en la línea base `6291230` (21/10) y en el merge del PR #1 `b7117a3` (02/11). Suite `extended`, amenazas `remote_and_local` (desde el 02/11): 50 reglas y 9 alertas `py/path-injection` sobre `b7117a3`; 7 siguen abiertas y 2 se descartaron como falso positivo. Análisis semanal y en cada push a `main`. | [Code scanning](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/security/code-scanning) · capturas [04](lab5/evidencia/capturas/04-code-scanning-default.webp), [05](lab5/evidencia/capturas/05-codeql-tool-status.webp), [06](lab5/evidencia/capturas/06-code-scanning-extended.webp), [07](lab5/evidencia/capturas/07-codeql-config-extended.webp) y [08](lab5/evidencia/capturas/08-codeql-alerta-6-falso-positivo.webp) |
 | Gitleaks (gitleaks-action v3) | Secretos | 21/10/2026 | Actions, PR #1: "No leaks detected" sobre todo el historial (`fetch-depth: 0`). También en verde en el push a `main` del 02/11/2026. | [Run 39690739269](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/actions/runs/39690739269) · [captura](lab5/evidencia/capturas/01-actions-pr1.webp) |
 | GitHub Secret Protection + push protection | Secretos | 21/10/2026 | Activados (API y captura) | [captura 03](lab5/evidencia/capturas/03-settings-ai-secret-protection.webp) |
-| Dependabot alerts | SCA | 21/10/2026 y 02/11/2026 | 0 alertas en la línea base. Desde el merge del PR #1 (02/11): 8 alertas abiertas, todas sobre los archivos de evidencia `docs/lab5/evidencia/requirements-*.txt` y ninguna sobre `pyproject.toml`: 7 de `chromadb` (4 CVE distintos) y 1 de `pytest` (CVE-2025-71176), que originó el PR #2. Triage en la sección 3. | [Dependabot](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/security/dependabot) · [captura 09](lab5/evidencia/capturas/09-dependabot-alertas.webp) |
+| Dependabot alerts | SCA | 21/10/2026 y 02/11/2026 | 0 alertas en la línea base. Desde el merge del PR #1 (02/11): 8 alertas, todas sobre los archivos de evidencia `docs/lab5/evidencia/requirements-*.txt` y ninguna sobre `pyproject.toml`: 7 de `chromadb` (4 CVE distintos) y 1 de `pytest` (CVE-2025-71176), que originó el PR #2. Tras el triage del 02/11, las 7 de `chromadb` quedaron descartadas como *not used* y la de `pytest` sigue abierta (F-04); el PR #2 se cerró sin fusionar. Detalle en la sección 3. | [Dependabot](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/security/dependabot) · capturas [09](lab5/evidencia/capturas/09-dependabot-alertas.webp), [10](lab5/evidencia/capturas/10-dependabot-chromadb-descartadas.webp) y [11](lab5/evidencia/capturas/11-pr2-cerrado.webp) |
 | pip-audit (2.10.1 en local) | SCA | 21/10/2026 | Local, versiones mínimas: 5 entradas en 2 paquetes: 3 CVE de `chromadb` 0.5.0 y 1 de `pytest` 8.0.0 (PYSEC-2026-1845 sale dos veces). Local y Actions (PR #1), últimas versiones: 88 paquetes y 5 entradas, todas de `chromadb` 1.5.9 (4 CVE distintos; PYSEC-2026-311 sale dos veces). La resolución de Actions coincide paquete por paquete con la local. | [`docs/lab5/evidencia/`](lab5/evidencia/) · [`resultado-pip-audit.zip`](lab5/evidencia/actions-pr1/resultado-pip-audit.zip) |
 | OWASP ZAP Baseline | DAST pasivo | — | Pendiente (punto 5) | — |
 
@@ -115,8 +115,8 @@ terminan en `|| true` y nunca fallan. El de Gitleaks sí falla si encuentra un s
 |---|---|---|---|---|---|---|
 | F-01 | SAST · CWE-250 | El contenedor corre como `root`: el `Dockerfile` no define `USER` (Semgrep `dockerfile.security.missing-user`). | Medio | `Dockerfile:16` | Crear un usuario sin privilegios y añadir `USER` antes de `CMD`. | Abierto |
 | F-02 | SAST · CWE-1357 | Las acciones de GitHub se referencian por etiqueta mutable (`@v4`, `@v5`, `@v3`), no por SHA (Semgrep `github-actions-mutable-action-tag`). | Bajo | `.github/workflows/seguridad-estatica.yml` | Fijar cada acción a su SHA; Dependabot (`github-actions`) las mantiene al día. | Abierto |
-| F-03 | SCA · CVE-2026-45829/45830/45831/45833 | `chromadb` tiene ejecución de código y falta de aislamiento entre tenants **en su servidor HTTP**. Tres avisos afectan a todo el rango `>=0.5.0`, y CVE-2026-45829 desde la 1.0.0. Sin versión corregida (Dependabot #2 a #8). | No aplica | `pyproject.toml` | Ninguno inmediato: ver análisis abajo. Vigilar el aviso. | Aceptado |
-| F-04 | SCA · CVE-2025-71176 | `pytest` ≤ 9.0.2 usa `/tmp/pytest-of-{usuario}` de forma insegura en UNIX. El rango `pytest>=8.0` lo permite (Dependabot #1). | Bajo | `pyproject.toml` (extra `dev`) | Subir el piso a `pytest>=9.0.3`. No fusionar el PR #2 de Dependabot (ver análisis abajo). | Abierto |
+| F-03 | SCA · CVE-2026-45829/45830/45831/45833 | `chromadb` tiene ejecución de código y falta de aislamiento entre tenants **en su servidor HTTP**. Tres avisos afectan a todo el rango `>=0.5.0`, y CVE-2026-45829 desde la 1.0.0. Sin versión corregida (Dependabot #2 a #8). | No aplica | `pyproject.toml` | Ninguno inmediato: ver análisis abajo. Vigilar el aviso. | Aceptado (en Dependabot, descartadas como *not used*) |
+| F-04 | SCA · CVE-2025-71176 | `pytest` ≤ 9.0.2 usa `/tmp/pytest-of-{usuario}` de forma insegura en UNIX. El rango `pytest>=8.0` lo permite (Dependabot #1). | Bajo | `pyproject.toml` (extra `dev`) | Subir el piso a `pytest>=9.0.3`. El PR #2 de Dependabot se cerró sin fusionar (ver análisis abajo). | Abierto |
 | F-05 | Revisión manual · CWE-798 | Clave HMAC de desarrollo fija en el código; se usa en silencio si no se exporta `MEMLAB_HMAC_KEY`. Semgrep `p/secrets` no la detectó. | Medio | `src/memlab/config.py:37` | Exigir la variable en corridas oficiales (fallar si falta) o dejar constancia en el manifiesto. | Abierto |
 | F-06 | SAST · CWE-829 | `dependabot.yml` no define `cooldown`: Dependabot propone una versión el mismo día en que se publica, sin margen para detectar un paquete comprometido (Semgrep `dependabot-missing-cooldown`). Lo introdujo el `dependabot.yml` agregado en este laboratorio. Hoy no tiene efecto práctico: `cooldown` solo aplica a las actualizaciones de versión, que están apagadas. | Bajo | `.github/dependabot.yml:5` y `:11` | Añadir `cooldown` con `default-days: 7` a cada ecosistema. | Abierto |
 | F-07 | SAST (CodeQL) · CWE-22 | `compute_metrics.py <corrida>` no valida el nombre de la corrida: con `../` lee `results.json` y `manifest.json` y escribe `<corrida>.json` fuera de `evidence/` (alertas #2, #8 y #9, `py/path-injection`). | Bajo | `experiments/compute_metrics.py:178-180` y `:191` | Aceptar solo nombres de carpetas que estén directamente en `evidence/runs/`. | Abierto |
@@ -203,8 +203,9 @@ CodeQL. El origen siempre es `parse_args()` de un script de `experiments/`:
   cambiar `chromadb` alteraría las corridas oficiales del laboratorio). Mantener el
   cliente embebido, no exponer ChromaDB por red y revisar el aviso con Dependabot y
   el job `sca`.
-- Decisión en Dependabot: descartar las alertas #2 a #8 como *Vulnerable code is not
-  actually used*, con esta justificación.
+- Decisión en Dependabot: las alertas #2 a #8 se descartaron el 02/11/2026 como
+  *Vulnerable code is not actually used*, con esta justificación resumida en el
+  comentario ([captura 10](lab5/evidencia/capturas/10-dependabot-chromadb-descartadas.webp)).
 - Observación: CVE-2026-45830/45831 (falta de aislamiento entre tenants) es el
   mismo tipo de falla que el control C1 corrige en la capa de recuperación. Aquí no
   depende del RBAC de ChromaDB: en el perfil `secure`, el filtro por
@@ -225,12 +226,15 @@ CodeQL. El origen siempre es `parse_args()` de un script de `experiments/`:
   La alerta #1 queda abierta mientras tanto. Está sobre el archivo de evidencia, así
   que subir el piso no basta para cerrarla: hay que regenerar la resolución mínima
   al reescanear.
-- **El PR #2 de Dependabot no se fusiona.** Se titula *bump pytest from 8.0.0 to
-  9.0.3*, pero no toca `pyproject.toml`, que es lo que define qué se instala: cambia
-  los dos archivos de evidencia. Además, en `requirements-ultimas.txt` **baja**
-  `pytest` de 9.1.1 a 9.0.3. Fusionarlo alteraría la evidencia de la auditoría sin
-  corregir nada. Es un ejemplo concreto de por qué no se actualiza a ciegas: el
-  título del PR no describe todo lo que cambia.
+- **El PR #2 de Dependabot se cerró sin fusionar** (02/11/2026,
+  [captura 11](lab5/evidencia/capturas/11-pr2-cerrado.webp)). Se titula *bump
+  pytest from 8.0.0 to 9.0.3*, pero no toca `pyproject.toml`, que es lo que define
+  qué se instala: cambia los dos archivos de evidencia. Además, en
+  `requirements-ultimas.txt` **baja** `pytest` de 9.1.1 a 9.0.3. Fusionarlo habría
+  alterado la evidencia de la auditoría sin corregir nada. Es un ejemplo concreto
+  de por qué no se actualiza a ciegas: el título del PR no describe todo lo que
+  cambia. La justificación quedó en un comentario del PR, y Dependabot respondió
+  que no volverá a avisar de esa versión.
 
 ## 4. Validación antes y después
 - Evidencia inicial (captura o artefacto): Actions del PR #1 (run 39690739269), corridas locales del 21/10/2026 (ver sección 2) y, del 02/11/2026, las 9 alertas de CodeQL ([captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp)) y las 8 de Dependabot ([captura 09](lab5/evidencia/capturas/09-dependabot-alertas.webp)).
