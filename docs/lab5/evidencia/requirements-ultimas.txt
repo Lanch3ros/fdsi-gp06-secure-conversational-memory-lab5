@@ -182,7 +182,7 @@ pypika==0.51.1
     # via chromadb
 pyproject-hooks==1.3.3
     # via build
-pytest==9.1.1
+pytest==9.0.3
     # via memlab (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via
