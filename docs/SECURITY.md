@@ -37,13 +37,25 @@ C4/C5, que depende de que la clave HMAC no sea la de desarrollo (F-05).
 ## 2. Línea base y herramientas
 | Herramienta | Tipo | Fecha | Resultado | Enlace a evidencia |
 |---|---|---|---|---|
-| Semgrep (`p/owasp-top-ten` + `p/secrets`) | SAST | 21/10/2026 | Corrida local: 220 reglas, 107 archivos, 12 hallazgos (1 ERROR, 11 WARNING). En Actions: pendiente de la primera ejecución. | Artefacto `resultado-semgrep` del workflow `seguridad-estatica.yml` |
+| Semgrep 1.182.0 (`p/owasp-top-ten` + `p/secrets`) | SAST | 21/10/2026 | Actions, PR #1: 115 archivos, 17 hallazgos (1 ERROR, 2 MEDIUM, 14 WARNING), 0 errores de análisis. Triage en la sección 3. | [Run 39690739269](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/actions/runs/39690739269) · [`resultado-semgrep.zip`](lab5/evidencia/actions-pr1/resultado-semgrep.zip) |
 | CodeQL Default setup | SAST | — | Pendiente de habilitar en Settings | Pestaña Security → Code scanning |
-| Gitleaks | Secretos | — | Pendiente de la primera ejecución en Actions | Job `Gitleaks (secret scanning)` |
+| Gitleaks (gitleaks-action v3) | Secretos | 21/10/2026 | Actions, PR #1: "No leaks detected" sobre todo el historial (`fetch-depth: 0`). También en verde en el push a `main` del 02/11/2026. | [Run 39690739269](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/actions/runs/39690739269) · [captura](lab5/evidencia/capturas/01-actions-pr1.webp) |
 | GitHub secret scanning + push protection | Secretos | 21/10/2026 | Habilitado (consultado por API) | Settings → Advanced Security |
 | Dependabot alerts | SCA | 21/10/2026 | Habilitado; 0 alertas abiertas | Pestaña Security → Dependabot |
-| pip-audit 2.10.1 | SCA | 21/10/2026 | Versiones mínimas: 5 vulnerabilidades en 2 paquetes. Últimas versiones: 5 en 1 paquete | [`docs/lab5/evidencia/`](lab5/evidencia/) y artefacto `resultado-pip-audit` |
+| pip-audit (2.10.1 en local) | SCA | 21/10/2026 | Local, versiones mínimas: 5 entradas en 2 paquetes (`chromadb` 0.5.0 y `pytest` 8.0.0). Local y Actions (PR #1), últimas versiones: 88 paquetes y 5 entradas, todas de `chromadb` 1.5.9 (4 CVE distintos; PYSEC-2026-311 sale dos veces). La resolución de Actions coincide paquete por paquete con la local. | [`docs/lab5/evidencia/`](lab5/evidencia/) · [`resultado-pip-audit.zip`](lab5/evidencia/actions-pr1/resultado-pip-audit.zip) |
 | OWASP ZAP Baseline | DAST pasivo | — | Pendiente (punto 5) | — |
+
+**Evidencia de Actions.** La ejecución de referencia es la del PR #1 (run
+39690739269, commit `145b8f8`, 21/10/2026), con los tres jobs en verde. Los
+artefactos se guardan sin modificar en
+[`docs/lab5/evidencia/actions-pr1/`](lab5/evidencia/actions-pr1/), y su SHA-256
+coincide con el `digest` que publica la API de GitHub para cada artefacto:
+
+- `resultado-semgrep.zip`: `7e57b1cea3ee4e1ab5246dbbaace32123ec2bfd21a3d332a48b8c21a0010ca03`
+- `resultado-pip-audit.zip`: `db37c81f3b8fed5f0851ab33ffe489492306f21b42a2c87fc1b35230f0fe9313`
+
+El verde de Semgrep y pip-audit no significa que no haya hallazgos: esos pasos
+terminan en `|| true` y nunca fallan. El de Gitleaks sí falla si encuentra un secreto.
 
 **Por qué Dependabot muestra 0 alertas.** El proyecto declara rangos (`chromadb>=0.5.0`)
 en `pyproject.toml` y no versiona un archivo de bloqueo, así que Dependabot no sabe
@@ -56,14 +68,36 @@ auditaron los dos extremos del rango: las versiones **mínimas** que permite
 | ID | Categoría | Descripción sin secretos | Riesgo | Archivo/ruta | Cambio propuesto | Estado |
 |---|---|---|---|---|---|---|
 | F-01 | SAST · CWE-250 | El contenedor corre como `root`: el `Dockerfile` no define `USER` (Semgrep `dockerfile.security.missing-user`). | Medio | `Dockerfile:16` | Crear un usuario sin privilegios y añadir `USER` antes de `CMD`. | Abierto |
-| F-02 | SAST · CWE-829 | Las acciones de GitHub se referencian por etiqueta mutable (`@v4`, `@v5`, `@v3`), no por SHA (Semgrep `github-actions-mutable-action-tag`). | Bajo | `.github/workflows/seguridad-estatica.yml` | Fijar cada acción a su SHA; Dependabot (`github-actions`) las mantiene al día. | Abierto |
+| F-02 | SAST · CWE-1357 | Las acciones de GitHub se referencian por etiqueta mutable (`@v4`, `@v5`, `@v3`), no por SHA (Semgrep `github-actions-mutable-action-tag`). | Bajo | `.github/workflows/seguridad-estatica.yml` | Fijar cada acción a su SHA; Dependabot (`github-actions`) las mantiene al día. | Abierto |
 | F-03 | SCA · CVE-2026-45829/45830/45831/45833 | `chromadb` (todas las versiones del rango) tiene ejecución de código y falta de aislamiento entre tenants **en su servidor HTTP**. Sin versión corregida. | No aplica | `pyproject.toml` | Ninguno inmediato: ver análisis abajo. Vigilar el aviso. | Aceptado |
 | F-04 | SCA · CVE-2025-71176 | `pytest` ≤ 9.0.2 usa `/tmp/pytest-of-{usuario}` de forma insegura en UNIX. El rango `pytest>=8.0` lo permite. | Bajo | `pyproject.toml` (extra `dev`) | Subir el piso a `pytest>=9.0.3`. | Abierto |
 | F-05 | Revisión manual · CWE-798 | Clave HMAC de desarrollo fija en el código; se usa en silencio si no se exporta `MEMLAB_HMAC_KEY`. Semgrep `p/secrets` no la detectó. | Medio | `src/memlab/config.py:37` | Exigir la variable en corridas oficiales (fallar si falta) o dejar constancia en el manifiesto. | Abierto |
+| F-06 | SAST · CWE-829 | `dependabot.yml` no define `cooldown`: Dependabot propone una versión el mismo día en que se publica, sin margen para detectar un paquete comprometido (Semgrep `dependabot-missing-cooldown`). Lo introdujo el `dependabot.yml` agregado en este laboratorio. | Bajo | `.github/dependabot.yml:5` y `:11` | Añadir `cooldown` con `default-days: 7` a cada ecosistema. | Abierto |
 
-Las 11 advertencias de Semgrep son 5 en el workflow del proyecto y 6 en las copias
-del kit del profesor (`Kit_Integracion_AppSec_GitHub_FSI/`); las del kit son
-duplicados y se cuentan como un solo hallazgo (F-02).
+### Triage de Semgrep (punto 3)
+
+Los 17 hallazgos de Actions (PR #1) salen de tres reglas:
+
+| Regla | Severidad Semgrep | Ocurrencias | Veredicto |
+|---|---|---|---|
+| `dockerfile.security.missing-user` | ERROR | 1 (`Dockerfile:16`) | Verdadero positivo → F-01 |
+| `github-actions-mutable-action-tag` | WARNING | 8 en `.github/workflows/seguridad-estatica.yml` | Verdadero positivo, riesgo bajo → F-02 |
+| `github-actions-mutable-action-tag` | WARNING | 6 en `Kit_Integracion_AppSec_GitHub_FSI/.github/workflows/` | **Falsa alarma** en la práctica |
+| `dependabot-missing-cooldown` | MEDIUM | 2 en `.github/dependabot.yml` | Verdadero positivo, riesgo bajo → F-06 |
+
+- **F-01 es real.** Sin `USER`, `memlab` corre como `root` dentro del contenedor, y
+  `docker-compose.yml` monta `./evidence` con permiso de escritura: un fallo en el
+  proceso tendría privilegios de `root` sobre el contenedor y sobre esa carpeta. El
+  impacto es acotado porque el contenedor solo se usa en local, pero el arreglo es
+  pequeño.
+- **Las 6 ocurrencias del kit son falsas alarmas.** GitHub Actions solo ejecuta los
+  workflows de `.github/workflows/` en la raíz del repositorio; las copias dentro
+  de `Kit_Integracion_AppSec_GitHub_FSI/` son material de referencia y nunca
+  corren. El patrón sí es real donde está activo (F-02), pero en esa ruta no hay
+  riesgo. Se pueden excluir del análisis con un `.semgrepignore`.
+- La corrida local del 21/10 dio 12 hallazgos y Actions 17. La diferencia son las
+  3 acciones del job `sca` y las 2 entradas de `dependabot.yml`, que se agregaron
+  después de esa corrida local.
 
 ### Análisis SCA (punto 4)
 
@@ -99,7 +133,7 @@ duplicados y se cuentan como un solo hallazgo (F-02).
   resolución actual ya usa la 9.1.1. Es candidato a la remediación del punto 7.
 
 ## 4. Validación antes y después
-- Evidencia inicial (captura o artefacto): Semgrep local y pip-audit del 21/10/2026 (ver sección 2).
+- Evidencia inicial (captura o artefacto): Actions del PR #1 (run 39690739269) y corridas locales del 21/10/2026 (ver sección 2).
 - Pull request con corrección: pendiente (punto 7).
 - Evidencia de reescaneo: pendiente.
 - Riesgo residual y decisión: pendiente.
