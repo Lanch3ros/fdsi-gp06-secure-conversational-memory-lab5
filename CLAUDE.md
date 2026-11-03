@@ -69,7 +69,7 @@ interfaz es la CLI `memlab` (`info`, `seed`, `ask`, `chat`).
 
 ```bash
 make setup                    # requiere uv y Python 3.11
-make test                     # 30 tests, segundos, sin modelo
+make test                     # 43 tests, segundos, sin modelo
 export MEMLAB_LLM=stub        # para desarrollar sin Ollama (el .env NO se carga solo)
 make t01 PROFILE=secure N_T01=40
 make t02 PROFILE=secure

@@ -2,8 +2,8 @@
 
 Lab. No. 05 (FDSI): seguridad en el ciclo de desarrollo. Este registro cubre los
 puntos 1 a 6 del enunciado (alcance, controles nativos, SAST + secretos, SCA, DAST
-pasivo y validación manual). Los puntos 7 y 8 (corrección y presentación) siguen
-pendientes.
+pasivo y validación manual) y la corrección del punto 7 (F-07 y F-08). Falta
+registrar el reescaneo de CodeQL de esa corrección y el punto 8 (presentación).
 
 ## 1. Alcance autorizado
 - Repositorio: https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5 (público, cuenta personal)
@@ -120,8 +120,8 @@ terminan en `|| true` y nunca fallan. El de Gitleaks sí falla si encuentra un s
 | F-04 | SCA · CVE-2025-71176 | `pytest` ≤ 9.0.2 usa `/tmp/pytest-of-{usuario}` de forma insegura en UNIX. El rango `pytest>=8.0` lo permite (Dependabot #1). | Bajo | `pyproject.toml` (extra `dev`) | Subir el piso a `pytest>=9.0.3`. El PR #2 de Dependabot se cerró sin fusionar (ver análisis abajo). | Abierto |
 | F-05 | Revisión manual · CWE-798 | Clave HMAC de desarrollo fija en el código; se usa en silencio si no se exporta `MEMLAB_HMAC_KEY`. Semgrep `p/secrets` no la detectó. | Medio | `src/memlab/config.py:37` | Exigir la variable en corridas oficiales (fallar si falta) o dejar constancia en el manifiesto. | Abierto |
 | F-06 | SAST · CWE-829 | `dependabot.yml` no define `cooldown`: Dependabot propone una versión el mismo día en que se publica, sin margen para detectar un paquete comprometido (Semgrep `dependabot-missing-cooldown`). Lo introdujo el `dependabot.yml` agregado en este laboratorio. Hoy no tiene efecto práctico: `cooldown` solo aplica a las actualizaciones de versión, que están apagadas. | Bajo | `.github/dependabot.yml:5` y `:11` | Añadir `cooldown` con `default-days: 7` a cada ecosistema. | Abierto |
-| F-07 | SAST (CodeQL) · CWE-22 | `compute_metrics.py <corrida>` no valida el nombre de la corrida: con `../` lee `results.json` y `manifest.json` y escribe `<corrida>.json` fuera de `evidence/` (alertas #2, #8 y #9, `py/path-injection`). | Bajo | `experiments/compute_metrics.py:178-180` y `:191` | Aceptar solo nombres de carpetas que estén directamente en `evidence/runs/`. | Abierto |
-| F-08 | SAST (CodeQL) · CWE-22 | `run_t02.py`, `run_t04.py` y `run_t05.py` usan `--profile` para crear la carpeta de la corrida y vaciar su `data/` (`shutil.rmtree`) antes de validarlo con `Profile(...)`. `run_t01.py` sí valida primero (alertas #1, #3, #4 y #5, `py/path-injection`). | Bajo | `experiments/_common.py:30` y `:60-62`, desde `run_t02.py:45-47`, `run_t04.py:46-48` y `run_t05.py:67-69` | Validar el perfil antes de usarlo, como `run_t01.py`, o con `choices` en `argparse`, como `cli.py`. | Abierto |
+| F-07 | SAST (CodeQL) · CWE-22 | `compute_metrics.py <corrida>` no valida el nombre de la corrida: con `../` lee `results.json` y `manifest.json` y escribe `<corrida>.json` fuera de `evidence/` (alertas #2, #8 y #9, `py/path-injection`). | Bajo | `experiments/compute_metrics.py:178-180` y `:191` | Aceptar solo nombres de carpetas que estén directamente en `evidence/runs/`. Hecho con `child_path()` (`experiments/_common.py`), al leer y al escribir. | Corregido (punto 7) |
+| F-08 | SAST (CodeQL) · CWE-22 | `run_t02.py`, `run_t04.py` y `run_t05.py` usan `--profile` para crear la carpeta de la corrida y vaciar su `data/` (`shutil.rmtree`) antes de validarlo con `Profile(...)`. `run_t01.py` sí valida primero (alertas #1, #3, #4 y #5, `py/path-injection`). | Bajo | `experiments/_common.py:30` y `:60-62`, desde `run_t02.py:45-47`, `run_t04.py:46-48` y `run_t05.py:67-69` | Validar el perfil antes de usarlo. Hecho en `new_run_dir()` (`experiments/_common.py`), que usan los cuatro runners; `choices` en `argparse` no bastaba, porque no revisa el valor por defecto que viene de `MEMLAB_PROFILE`. | Corregido (punto 7) |
 | F-09 | DAST (ZAP) · CWE-693 | La API de Ollama no envía `X-Content-Type-Options` ni `Cross-Origin-Resource-Policy` (reglas 10021 y 90004 de ZAP). | Bajo | `http://localhost:11434/` (Ollama 0.34.2) | Ninguno: es un componente de terceros, escucha solo en loopback y lo consume `httpx`, no un navegador. Si algún día se expusiera, iría detrás de un proxy que agregue encabezados y autenticación. | Aceptado |
 | F-10 | Validación manual · CWE-306 | La API de Ollama no exige autenticación: cualquier proceso del equipo, incluidos los contenedores, puede consultarla y usar el modelo (así lo hace `memlab`, sin credenciales). Lo mitigan dos controles validados: escucha solo en `127.0.0.1` y rechaza con 403 los `Origin` de otros sitios. | Bajo | `http://localhost:11434/api/*` (Ollama 0.34.2) | Mantener Ollama en loopback y no ampliar `OLLAMA_ORIGINS`; si se expone, ponerlo detrás de un proxy con autenticación y TLS (ver sección 5). | Aceptado |
 
@@ -173,9 +173,9 @@ CodeQL. El origen siempre es `parse_args()` de un script de `experiments/`:
   nombres de `evidence/runs/` y no de la línea de comandos. El efecto más probable
   es un error de tipeo: `make t02 PROFILE=secur` deja en `evidence/runs/` una
   carpeta sin resultados antes de fallar.
-- F-07 y F-08 son candidatos a la corrección del punto 7: el arreglo es pequeño, no
-  cambia los resultados de las corridas válidas y CodeQL puede confirmar el cierre
-  de las alertas al reanalizar. Sus siete alertas siguen abiertas
+- F-07 y F-08 se corrigieron en el punto 7 (sección 4): el arreglo es pequeño y no
+  cambia los resultados de las corridas válidas. Sus siete alertas siguen abiertas
+  hasta que CodeQL reanalice `main`
   ([captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp) muestra las
   9 antes del triage).
 
@@ -299,9 +299,30 @@ que ejecutó ZAP (`zap.yaml`) y la salida de consola están en
 
 ## 4. Validación antes y después
 - Evidencia inicial (captura o artefacto): Actions del PR #1 (run 39690739269), corridas locales del 21/10/2026 (ver sección 2) y, del 02/11/2026, las 9 alertas de CodeQL ([captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp)) y las 8 de Dependabot ([captura 09](lab5/evidencia/capturas/09-dependabot-alertas.webp)). El informe ZAP local del 03/11/2026 es la línea base del DAST ([`zap-local/`](lab5/evidencia/zap-local/)).
-- Pull request con corrección: pendiente (punto 7).
-- Evidencia de reescaneo: pendiente.
-- Riesgo residual y decisión: pendiente.
+- Pull request con corrección: rama `security/lab-fsi-remediacion`. Corrige F-07 y
+  F-08 sin tocar `src/memlab`:
+  - `child_path()` (`experiments/_common.py`) arma la ruta dentro de la carpeta
+    base y rechaza `..`, rutas absolutas y subcarpetas. Normaliza la ruta y
+    comprueba su prefijo, que es el patrón que CodeQL recomienda para
+    `py/path-injection`.
+  - `compute()` (`experiments/compute_metrics.py`) la usa al leer
+    `evidence/runs/<corrida>` y al escribir `evidence/metrics/<corrida>.json`.
+  - `new_run_dir()` valida el perfil con `Profile` antes de crear la carpeta, así
+    que un perfil mal escrito ya no deja carpetas ni vacía `data/`.
+- Prueba de regresión: `tests/test_rutas_experimentos.py`, 13 casos con carpetas
+  temporales y sin modelo. Sobre `main` sin la corrección fallan 11 y pasan 2; con
+  la corrección pasan los 13. `make test` da 43 de 43. Las salidas están en
+  [`docs/lab5/evidencia/remediacion/`](lab5/evidencia/remediacion/).
+- Corridas válidas: `make metrics` recalculó las métricas de todas las corridas de
+  `evidence/runs/`, y quedaron idénticas a las versionadas.
+- Desde la línea de comandos: `compute_metrics.py ../fuera` y
+  `run_t02.py --profile secur` terminan con código 1 sin leer, escribir ni crear
+  nada; `evidence/runs/` sigue con las mismas 12 carpetas.
+- Evidencia de reescaneo: pendiente. CodeQL analiza el PR y, después del merge,
+  `main`; ahí debe verse si las 7 alertas de F-07 y F-08 pasan a *Fixed*.
+- Riesgo residual y decisión: bajo. Quien corre los experimentos sigue
+  controlando sus argumentos, pero ya no puede leer ni escribir fuera de
+  `evidence/` ni dejar carpetas sobrantes por un error de tipeo.
 
 ## 5. Pentest autorizado
 Validación manual del punto 6, hecha el 03/11/2026. Corresponde al hallazgo F-10.
