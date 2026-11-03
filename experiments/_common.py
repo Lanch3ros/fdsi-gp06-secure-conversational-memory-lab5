@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SRC = REPO / "src"
 sys.path.insert(0, str(SRC))
+
+from memlab.config import Profile  # noqa: E402
 
 
 def git_sha() -> str:
@@ -23,10 +26,30 @@ def git_sha() -> str:
         return "sin-git"
 
 
+def child_path(base: Path, name: str) -> Path:
+    """`base / name`, solo si `name` queda directamente dentro de `base`.
+
+    Los nombres de corrida y los perfiles llegan de la linea de comandos (F-07 y
+    F-08, CodeQL py/path-injection). Se rechaza `..`, una ruta absoluta o una
+    subcarpeta. Normalizar la ruta y comprobar su prefijo es la validacion que
+    CodeQL reconoce para esa regla.
+    """
+    root = os.path.normpath(base)
+    path = os.path.normpath(os.path.join(root, name))
+    if not path.startswith(root + os.sep):
+        raise SystemExit(f"nombre no valido, sale de {base}: {name!r}")
+    if os.path.dirname(path) != root:
+        raise SystemExit(f"nombre no valido, no es hijo directo de {base}: {name!r}")
+    return Path(path)
+
+
 def new_run_dir(test_id: str, profile: str, evidence_dir: Path | None = None) -> Path:
+    # El perfil se valida antes de tocar el disco (F-08): con un valor que no sea
+    # unsecure o secure no se crea ninguna carpeta.
+    profile = Profile(profile).value
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     base = evidence_dir or (REPO / "evidence" / "runs")
-    run_dir = base / f"{stamp}-{test_id}-{profile}-{git_sha()}"
+    run_dir = child_path(base, f"{stamp}-{test_id}-{profile}-{git_sha()}")
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir
 

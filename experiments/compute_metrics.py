@@ -15,7 +15,7 @@ import json
 import sys
 from pathlib import Path
 
-from _common import REPO, write_json
+from _common import REPO, child_path, write_json
 
 from memlab.stats import percentile, rule_of_three, wilson
 
@@ -175,7 +175,7 @@ def metrics_t05(results: dict, manifest: dict) -> dict:
 
 
 def compute(run_name: str) -> dict:
-    run_dir = RUNS / run_name
+    run_dir = child_path(RUNS, run_name)
     results = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     fn = {
@@ -188,7 +188,7 @@ def compute(run_name: str) -> dict:
     out["git_sha"] = manifest.get("git_sha")
     out["model"] = manifest.get("model")
     METRICS.mkdir(parents=True, exist_ok=True)
-    write_json(METRICS / f"{run_name}.json", out)
+    write_json(child_path(METRICS, f"{run_name}.json"), out)
     return out
 
 
