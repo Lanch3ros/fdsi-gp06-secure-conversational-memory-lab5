@@ -344,5 +344,8 @@ Validación manual del punto 6, hecha el 03/11/2026. Corresponde al hallazgo F-1
   cliente habla HTTP sin credenciales (`src/memlab/llm.py:34`): apuntarlo a un
   Ollama remoto enviaría el contexto, con las memorias, sin cifrar.
 - **Prueba de regresión:** volver a correr `validar-ollama.sh` después de cualquier
-  cambio de configuración de Ollama. Lo esperado: P1, P2 y P5 en `200`, P3
-  rechazada y P4 en `403`.
+  cambio de configuración de Ollama. El script compara cada respuesta con la
+  esperada (P1, P2 y P5 en `200`, P3 sin conexión y P4 en `403`) y termina con
+  código 1 si alguna no coincide, si Ollama no responde o si P3 no se puede
+  comprobar. Con Ollama apagado da 4 fallas y código 1; con Ollama activo, las 5
+  pruebas pasan y termina con código 0.
