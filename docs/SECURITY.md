@@ -1,14 +1,15 @@
 # Seguridad del proyecto — evidencia del laboratorio
 
 Lab. No. 05 (FDSI): seguridad en el ciclo de desarrollo. Este registro cubre los
-puntos 1 a 4 del enunciado (alcance, controles nativos, SAST + secretos y SCA). Los
-puntos 5 a 8 (DAST, validación manual, corrección y presentación) siguen pendientes.
+puntos 1 a 5 del enunciado (alcance, controles nativos, SAST + secretos, SCA y DAST
+pasivo). Los puntos 6 a 8 (validación manual, corrección y presentación) siguen
+pendientes.
 
 ## 1. Alcance autorizado
 - Repositorio: https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5 (público, cuenta personal)
 - Rama evaluada y commit de línea base: `main` / `6291230868533ff5c4a99ba0895638ab97079e39`
 - Rama del laboratorio: `security/lab-fsi`
-- URL de staging propio (si aplica): no hay. El proyecto no expone servicio web (ver abajo); el DAST del punto 5 queda por definir.
+- URL de staging propio (si aplica): no hay. El proyecto no expone servicio web (ver abajo). Para el DAST del punto 5 se usó la alternativa local que permite el enunciado: ZAP Baseline con Docker contra la API de Ollama del laboratorio en `localhost:11434` (sección 3).
 - Responsables: Isaac David Burgos Cervantes · Jose Luis Lancheros Aroya · Gina Sofía García Zapata (FDSI-GP-06).
 - Autorización: repositorio y entorno propios del equipo, 21/10/2026.
 - Fuera de alcance: producción, sistemas de terceros, datos reales y pruebas destructivas.
@@ -43,7 +44,7 @@ C4/C5, que depende de que la clave HMAC no sea la de desarrollo (F-05).
 | GitHub Secret Protection + push protection | Secretos | 21/10/2026 | Activados (API y captura) | [captura 03](lab5/evidencia/capturas/03-settings-ai-secret-protection.webp) |
 | Dependabot alerts | SCA | 21/10/2026 y 02/11/2026 | 0 alertas en la línea base. Desde el merge del PR #1 (02/11): 8 alertas, todas sobre los archivos de evidencia `docs/lab5/evidencia/requirements-*.txt` y ninguna sobre `pyproject.toml`: 7 de `chromadb` (4 CVE distintos) y 1 de `pytest` (CVE-2025-71176), que originó el PR #2. Tras el triage del 02/11, las 7 de `chromadb` quedaron descartadas como *not used* y la de `pytest` sigue abierta (F-04); el PR #2 se cerró sin fusionar. Detalle en la sección 3. | [Dependabot](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/security/dependabot) · capturas [09](lab5/evidencia/capturas/09-dependabot-alertas.webp), [10](lab5/evidencia/capturas/10-dependabot-chromadb-descartadas.webp) y [11](lab5/evidencia/capturas/11-pr2-cerrado.webp) |
 | pip-audit (2.10.1 en local) | SCA | 21/10/2026 | Local, versiones mínimas: 5 entradas en 2 paquetes: 3 CVE de `chromadb` 0.5.0 y 1 de `pytest` 8.0.0 (PYSEC-2026-1845 sale dos veces). Local y Actions (PR #1), últimas versiones: 88 paquetes y 5 entradas, todas de `chromadb` 1.5.9 (4 CVE distintos; PYSEC-2026-311 sale dos veces). La resolución de Actions coincide paquete por paquete con la local. | [`docs/lab5/evidencia/`](lab5/evidencia/) · [`resultado-pip-audit.zip`](lab5/evidencia/actions-pr1/resultado-pip-audit.zip) |
-| OWASP ZAP Baseline | DAST pasivo | — | Pendiente (punto 5) | — |
+| OWASP ZAP 2.17.0 Baseline (Docker, local) | DAST pasivo | 03/11/2026 | Alternativa local, porque no hay staging: API de Ollama 0.34.2 del laboratorio (`localhost:11434`). 3 URL analizadas, 0 FAIL y 3 WARN: 2 de riesgo bajo y 1 informativa, todas por encabezados HTTP. Las otras 65 reglas pasivas no alertaron. Triage en la sección 3. | [`docs/lab5/evidencia/zap-local/`](lab5/evidencia/zap-local/) |
 
 **Controles nativos de GitHub (punto 2).** Estado en Settings → Advanced Security
 el 02/11/2026 ([captura 02](lab5/evidencia/capturas/02-settings-dependabot-codeql.webp),
@@ -121,6 +122,7 @@ terminan en `|| true` y nunca fallan. El de Gitleaks sí falla si encuentra un s
 | F-06 | SAST · CWE-829 | `dependabot.yml` no define `cooldown`: Dependabot propone una versión el mismo día en que se publica, sin margen para detectar un paquete comprometido (Semgrep `dependabot-missing-cooldown`). Lo introdujo el `dependabot.yml` agregado en este laboratorio. Hoy no tiene efecto práctico: `cooldown` solo aplica a las actualizaciones de versión, que están apagadas. | Bajo | `.github/dependabot.yml:5` y `:11` | Añadir `cooldown` con `default-days: 7` a cada ecosistema. | Abierto |
 | F-07 | SAST (CodeQL) · CWE-22 | `compute_metrics.py <corrida>` no valida el nombre de la corrida: con `../` lee `results.json` y `manifest.json` y escribe `<corrida>.json` fuera de `evidence/` (alertas #2, #8 y #9, `py/path-injection`). | Bajo | `experiments/compute_metrics.py:178-180` y `:191` | Aceptar solo nombres de carpetas que estén directamente en `evidence/runs/`. | Abierto |
 | F-08 | SAST (CodeQL) · CWE-22 | `run_t02.py`, `run_t04.py` y `run_t05.py` usan `--profile` para crear la carpeta de la corrida y vaciar su `data/` (`shutil.rmtree`) antes de validarlo con `Profile(...)`. `run_t01.py` sí valida primero (alertas #1, #3, #4 y #5, `py/path-injection`). | Bajo | `experiments/_common.py:30` y `:60-62`, desde `run_t02.py:45-47`, `run_t04.py:46-48` y `run_t05.py:67-69` | Validar el perfil antes de usarlo, como `run_t01.py`, o con `choices` en `argparse`, como `cli.py`. | Abierto |
+| F-09 | DAST (ZAP) · CWE-693 | La API de Ollama no envía `X-Content-Type-Options` ni `Cross-Origin-Resource-Policy` (reglas 10021 y 90004 de ZAP). | Bajo | `http://localhost:11434/` (Ollama 0.34.2) | Ninguno: es un componente de terceros, escucha solo en loopback y lo consume `httpx`, no un navegador. Si algún día se expusiera, iría detrás de un proxy que agregue encabezados y autenticación. | Aceptado |
 
 ### Triage de Semgrep (punto 3)
 
@@ -236,8 +238,66 @@ CodeQL. El origen siempre es `parse_args()` de un script de `experiments/`:
   cambia. La justificación quedó en un comentario del PR, y Dependabot respondió
   que no volverá a avisar de esa versión.
 
+### DAST pasivo (punto 5)
+
+**Por qué en localhost.** `memlab` es una herramienta de línea de comandos y no
+expone servicio web, así que no hay staging HTTPS que escanear. Para ese caso el
+enunciado permite un "baseline local sobre localhost con Docker". La única
+superficie HTTP del sistema es la API de Ollama, que `memlab` llama sin
+credenciales (`src/memlab/llm.py:34`) en tres rutas: `POST /api/chat`,
+`GET /api/tags` y `GET /api/version`. Es la instancia propia del laboratorio, con
+datos ficticios.
+
+**Entorno verificado antes del escaneo (03/11/2026).**
+- Ollama 0.34.2, arrancado con `ollama serve` y sin `OLLAMA_HOST`. Escucha solo en
+  `127.0.0.1:11434` (lo muestran `lsof` y su propio log), así que no es accesible
+  desde la red.
+- Docker Engine 29.9.2 e imagen `ghcr.io/zaproxy/zaproxy:stable` para arm64 (ZAP
+  2.17.0), digest
+  `sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af`.
+
+**Comando.** Es el del workflow `dast-staging.yml` del kit con otro destino. Desde
+el contenedor, el localhost del Mac se alcanza como `host.docker.internal`:
+
+```bash
+docker run --rm -v "<carpeta>:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+  zap-baseline.py -t http://host.docker.internal:11434 -m 1 -r zap-report.html -J zap-report.json -I
+```
+
+Es pasivo: un recorrido de hasta 1 minuto y reglas pasivas, sin ataques. Corrió de
+22:03:02 a 22:03:30 UTC y terminó con código 0. Los informes HTML y JSON, el plan
+que ejecutó ZAP (`zap.yaml`) y la salida de consola están en
+[`docs/lab5/evidencia/zap-local/`](lab5/evidencia/zap-local/).
+
+| Regla de ZAP | Riesgo (confianza) | Instancias | Veredicto |
+|---|---|---|---|
+| 10021 X-Content-Type-Options Header Missing | Bajo (media) | `/` | Real, sin impacto práctico → F-09 |
+| 90004 Cross-Origin-Resource-Policy Header Missing or Invalid | Bajo (media) | `/` | Real, sin impacto práctico → F-09 |
+| 10049 Storable and Cacheable Content | Informativo (media) | `/`, `/robots.txt` y `/sitemap.xml` | No aplica |
+
+- **Los dos encabezados faltan de verdad.** `GET /` devuelve `Ollama is running` en
+  texto plano, sin encabezados de seguridad. Pero los dos protegen a un navegador:
+  uno evita que adivine el tipo de contenido y el otro limita la carga del recurso
+  desde otros orígenes. Aquí la API la consume `memlab` con `httpx`, no un
+  navegador, y solo escucha en loopback.
+- **10049 no aplica.** Avisa que las respuestas pueden quedar en caché porque no
+  traen `Cache-Control`. `/` solo dice que el servicio está activo y las otras dos
+  rutas son 404: no hay nada sensible que cachear.
+
+**Limitaciones.**
+- El recorrido solo encontró 3 URL: `/` y dos 404. Ninguna página enlaza las rutas
+  `/api/*`, así que el baseline no analizó las que usa `memlab`.
+- Se escaneó un componente de terceros, no el código de `memlab`. Los riesgos
+  principales del proyecto (aislamiento entre usuarios e instrucciones
+  persistentes) están en su lógica: los miden T01 y T02, y el SAST revisa el código.
+- La API es HTTP sobre loopback; el staging HTTPS del enunciado no aplica.
+- La etiqueta `stable` cambia con cada versión de ZAP; por eso se registra el
+  digest de la imagen.
+- El baseline no comprueba autenticación. Durante la preparación, la API respondió
+  a `GET /api/version` sin credenciales: es la hipótesis que se valida en el punto 6.
+
 ## 4. Validación antes y después
-- Evidencia inicial (captura o artefacto): Actions del PR #1 (run 39690739269), corridas locales del 21/10/2026 (ver sección 2) y, del 02/11/2026, las 9 alertas de CodeQL ([captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp)) y las 8 de Dependabot ([captura 09](lab5/evidencia/capturas/09-dependabot-alertas.webp)).
+- Evidencia inicial (captura o artefacto): Actions del PR #1 (run 39690739269), corridas locales del 21/10/2026 (ver sección 2) y, del 02/11/2026, las 9 alertas de CodeQL ([captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp)) y las 8 de Dependabot ([captura 09](lab5/evidencia/capturas/09-dependabot-alertas.webp)). El informe ZAP local del 03/11/2026 es la línea base del DAST ([`zap-local/`](lab5/evidencia/zap-local/)).
 - Pull request con corrección: pendiente (punto 7).
 - Evidencia de reescaneo: pendiente.
 - Riesgo residual y decisión: pendiente.
