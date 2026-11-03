@@ -1,0 +1,50 @@
+# Validacion manual (Lab 05, punto 6): API de Ollama sin autenticacion
+# Fecha: 2026-11-03T22:30:38Z
+# Solo peticiones de lectura contra la instancia local del laboratorio.
+
+## Donde escucha Ollama
+$ lsof -nP -iTCP:11434 -sTCP:LISTEN   (sin las columnas de usuario y dispositivo)
+COMMAND PID TYPE NODE NAME 
+ollama 34002 IPv4 TCP 127.0.0.1:11434 (LISTEN)
+
+## P1. GET /api/version sin credenciales, desde el propio equipo
+$ curl -sSi http://127.0.0.1:11434/api/version
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Tue, 03 Nov 2026 22:30:38 GMT
+Content-Length: 20
+
+{"version":"0.34.2"}
+
+## P2. GET /api/tags sin credenciales (lista de modelos, solo lectura)
+$ curl -sSi http://127.0.0.1:11434/api/tags
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Tue, 03 Nov 2026 22:30:38 GMT
+Content-Length: 459
+
+{"models":[{"name":"llama3.1:8b-instruct-q4_K_M","model":"llama3.1:8b-instruct-q4_K_M","modified_at":"2026-09-19T21:58:42.828033479-05:00","size":4920753328,"digest":"46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e","details":{"parent_model":"","format":"gguf","family":"llama","families":["llama"],"parameter_size":"8.0B","quantization_level":"Q4_K_M","context_length":131072,"embedding_length":4096},"capabilities":["completion","tools"]}]}
+
+## P3. GET /api/version por la IP de red del equipo
+$ curl -sSi http://<IP-de-red-local>:11434/api/version
+curl: (7) Failed to connect to <IP-de-red-local> port 11434 after 1 ms: Couldn't connect to server
+(curl termino con codigo 7)
+
+## P4. GET /api/version con el Origin de otro sitio, como lo enviaria un navegador
+$ curl -sSi -H 'Origin: http://evil.local' http://127.0.0.1:11434/api/version
+HTTP/1.1 403 Forbidden
+Date: Tue, 03 Nov 2026 22:30:38 GMT
+Content-Length: 0
+
+
+
+## P5. GET /api/version con un Origin local (control)
+$ curl -sSi -H 'Origin: http://localhost:3000' http://127.0.0.1:11434/api/version
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: http://localhost:3000
+Content-Type: application/json; charset=utf-8
+Vary: Origin
+Date: Tue, 03 Nov 2026 22:30:38 GMT
+Content-Length: 20
+
+{"version":"0.34.2"}

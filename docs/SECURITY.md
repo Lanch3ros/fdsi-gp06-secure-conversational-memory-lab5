@@ -1,8 +1,8 @@
 # Seguridad del proyecto — evidencia del laboratorio
 
 Lab. No. 05 (FDSI): seguridad en el ciclo de desarrollo. Este registro cubre los
-puntos 1 a 5 del enunciado (alcance, controles nativos, SAST + secretos, SCA y DAST
-pasivo). Los puntos 6 a 8 (validación manual, corrección y presentación) siguen
+puntos 1 a 6 del enunciado (alcance, controles nativos, SAST + secretos, SCA, DAST
+pasivo y validación manual). Los puntos 7 y 8 (corrección y presentación) siguen
 pendientes.
 
 ## 1. Alcance autorizado
@@ -123,6 +123,7 @@ terminan en `|| true` y nunca fallan. El de Gitleaks sí falla si encuentra un s
 | F-07 | SAST (CodeQL) · CWE-22 | `compute_metrics.py <corrida>` no valida el nombre de la corrida: con `../` lee `results.json` y `manifest.json` y escribe `<corrida>.json` fuera de `evidence/` (alertas #2, #8 y #9, `py/path-injection`). | Bajo | `experiments/compute_metrics.py:178-180` y `:191` | Aceptar solo nombres de carpetas que estén directamente en `evidence/runs/`. | Abierto |
 | F-08 | SAST (CodeQL) · CWE-22 | `run_t02.py`, `run_t04.py` y `run_t05.py` usan `--profile` para crear la carpeta de la corrida y vaciar su `data/` (`shutil.rmtree`) antes de validarlo con `Profile(...)`. `run_t01.py` sí valida primero (alertas #1, #3, #4 y #5, `py/path-injection`). | Bajo | `experiments/_common.py:30` y `:60-62`, desde `run_t02.py:45-47`, `run_t04.py:46-48` y `run_t05.py:67-69` | Validar el perfil antes de usarlo, como `run_t01.py`, o con `choices` en `argparse`, como `cli.py`. | Abierto |
 | F-09 | DAST (ZAP) · CWE-693 | La API de Ollama no envía `X-Content-Type-Options` ni `Cross-Origin-Resource-Policy` (reglas 10021 y 90004 de ZAP). | Bajo | `http://localhost:11434/` (Ollama 0.34.2) | Ninguno: es un componente de terceros, escucha solo en loopback y lo consume `httpx`, no un navegador. Si algún día se expusiera, iría detrás de un proxy que agregue encabezados y autenticación. | Aceptado |
+| F-10 | Validación manual · CWE-306 | La API de Ollama no exige autenticación: cualquier proceso del equipo, incluidos los contenedores, puede consultarla y usar el modelo (así lo hace `memlab`, sin credenciales). Lo mitigan dos controles validados: escucha solo en `127.0.0.1` y rechaza con 403 los `Origin` de otros sitios. | Bajo | `http://localhost:11434/api/*` (Ollama 0.34.2) | Mantener Ollama en loopback y no ampliar `OLLAMA_ORIGINS`; si se expone, ponerlo detrás de un proxy con autenticación y TLS (ver sección 5). | Aceptado |
 
 ### Triage de Semgrep (punto 3)
 
@@ -293,8 +294,8 @@ que ejecutó ZAP (`zap.yaml`) y la salida de consola están en
 - La API es HTTP sobre loopback; el staging HTTPS del enunciado no aplica.
 - La etiqueta `stable` cambia con cada versión de ZAP; por eso se registra el
   digest de la imagen.
-- El baseline no comprueba autenticación. Durante la preparación, la API respondió
-  a `GET /api/version` sin credenciales: es la hipótesis que se valida en el punto 6.
+- El baseline no comprueba autenticación. Eso se validó a mano en el punto 6
+  (sección 5, F-10).
 
 ## 4. Validación antes y después
 - Evidencia inicial (captura o artefacto): Actions del PR #1 (run 39690739269), corridas locales del 21/10/2026 (ver sección 2) y, del 02/11/2026, las 9 alertas de CodeQL ([captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp)) y las 8 de Dependabot ([captura 09](lab5/evidencia/capturas/09-dependabot-alertas.webp)). El informe ZAP local del 03/11/2026 es la línea base del DAST ([`zap-local/`](lab5/evidencia/zap-local/)).
@@ -303,8 +304,45 @@ que ejecutó ZAP (`zap.yaml`) y la salida de consola están en
 - Riesgo residual y decisión: pendiente.
 
 ## 5. Pentest autorizado
-- Hipótesis: pendiente (punto 6).
-- Entorno de pruebas aislado:
-- Solicitudes inocuas y respuestas observadas (sin datos personales):
-- Resultado: validado / no reproducible / requiere revisión
-- Recomendación y prueba de regresión:
+Validación manual del punto 6, hecha el 03/11/2026. Corresponde al hallazgo F-10.
+
+- **Hipótesis:** la API de Ollama que usa `memlab` no exige autenticación. Su
+  control de acceso depende solo de dos cosas: que escuche en loopback y que
+  rechace las peticiones de navegador que vienen de otros sitios (CORS).
+- **Entorno de pruebas aislado:** el Mac del equipo, con Ollama 0.34.2 arrancado
+  con `ollama serve` y sin variables `OLLAMA_*`. El modelo es el del laboratorio,
+  con el mismo digest de las corridas oficiales (`46e0c10c…`). Sin datos personales.
+- **Solicitudes inocuas y respuestas observadas:** solo `GET /api/version` y
+  `GET /api/tags`. El script y su salida están en
+  [`docs/lab5/evidencia/validacion-manual/`](lab5/evidencia/validacion-manual/),
+  sin la IP de red ni el usuario local.
+
+| Prueba | Petición | Respuesta | Qué muestra |
+|---|---|---|---|
+| P1 | `GET /api/version` sin credenciales | `200` | No hay autenticación |
+| P2 | `GET /api/tags` sin credenciales | `200`, con la lista de modelos | Cualquiera que llegue al puerto ve qué modelos hay |
+| P3 | `GET /api/version` por la IP de red del equipo | Conexión rechazada | No es accesible desde la red |
+| P4 | `GET /api/version` con `Origin: http://evil.local` | `403` | Un sitio web abierto en el navegador no puede usarla |
+| P5 | `GET /api/version` con `Origin: http://localhost:3000` (control) | `200`, con `Access-Control-Allow-Origin` | El rechazo de P4 se debe al origen |
+
+- **Resultado: validado.** La API no exige autenticación (P1 y P2), y las dos
+  mitigaciones funcionan (P3, P4 y P5). Cualquier proceso del equipo puede usarla,
+  incluso desde un contenedor: en el punto 5, ZAP la alcanzó a través de
+  `host.docker.internal`.
+- **Impacto:** para aprovecharlo hay que poder ejecutar código en el equipo. Con
+  eso, un proceso podría usar el modelo o reemplazarlo por otro con el mismo
+  nombre, y alterar las corridas (integridad). Las rutas que modifican modelos
+  (`/api/pull`, `/api/create`, `/api/copy` y `/api/delete`) no se probaron, porque
+  cambiarían el estado del laboratorio. Un reemplazo se notaría: el
+  `manifest.json` de cada corrida guarda el digest que `fingerprint()` lee de
+  `/api/tags` (`src/memlab/llm.py:57`), y P2 muestra el digest oficial.
+- **Recomendación:** mantener Ollama solo en loopback. Eso significa no usar
+  `OLLAMA_HOST=0.0.0.0`, no publicar el puerto 11434 en `docker-compose.yml` (hoy
+  no lo publica) y no ampliar `OLLAMA_ORIGINS`. Si algún día se expusiera, debería
+  ir detrás de un proxy con autenticación y TLS. Del lado de `memlab`,
+  `MEMLAB_OLLAMA_HOST` acepta cualquier URL (`src/memlab/config.py:67`) y el
+  cliente habla HTTP sin credenciales (`src/memlab/llm.py:34`): apuntarlo a un
+  Ollama remoto enviaría el contexto, con las memorias, sin cifrar.
+- **Prueba de regresión:** volver a correr `validar-ollama.sh` después de cualquier
+  cambio de configuración de Ollama. Lo esperado: P1, P2 y P5 en `200`, P3
+  rechazada y P4 en `403`.
