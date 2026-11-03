@@ -1,0 +1,13 @@
+# Casos de F-07 y F-08 desde la linea de comandos, DESPUES de la correccion
+# Fecha: 2026-11-03T23:43:59Z
+
+## F-07: nombre de corrida fuera de evidence/runs/
+$ .venv/bin/python experiments/compute_metrics.py ../fuera
+nombre no valido, sale de <repo>/evidence/runs: '../fuera'
+(codigo de salida: 1)
+
+## F-08: perfil mal escrito, el caso de make t02 PROFILE=secur
+$ .venv/bin/python experiments/run_t02.py --profile secur
+ValueError: 'secur' is not a valid Profile
+(codigo de salida: 1)
+(carpetas en evidence/runs/: 12 antes y 12 despues)

@@ -1,0 +1,23 @@
+# Prueba de regresion de F-07 y F-08 DESPUES de la correccion
+# Codigo: rama security/lab-fsi-remediacion (experiments/_common.py y experiments/compute_metrics.py corregidos)
+# Fecha: 2026-11-03T23:43:31Z
+$ .venv/bin/python -m pytest -v --tb=no --no-header -rN -p no:cacheprovider tests/test_rutas_experimentos.py
+============================= test session starts ==============================
+collecting ... collected 13 items
+
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[absoluto] PASSED [  7%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[padre] PASSED [ 15%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[relativo] PASSED [ 23%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[subcarpeta] PASSED [ 30%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[vacio] PASSED [ 38%]
+tests/test_rutas_experimentos.py::test_compute_metrics_acepta_una_corrida_de_runs PASSED [ 46%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[secur] PASSED [ 53%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[../../../fuera] PASSED [ 61%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[/fuera] PASSED [ 69%]
+tests/test_rutas_experimentos.py::test_new_run_dir_crea_la_corrida_dentro_de_runs PASSED [ 76%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t02] PASSED [ 84%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t04] PASSED [ 92%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t05] PASSED [100%]
+
+============================== 13 passed in 0.04s ==============================
+(codigo de salida de pytest: 0)

@@ -1,0 +1,23 @@
+# Prueba de regresion de F-07 y F-08 ANTES de la correccion
+# Codigo: main 939f78d + tests/test_rutas_experimentos.py, sin cambios en experiments/
+# Fecha: 2026-11-03T23:42:18Z
+$ .venv/bin/python -m pytest -v --tb=no --no-header -rN -p no:cacheprovider tests/test_rutas_experimentos.py
+============================= test session starts ==============================
+collecting ... collected 13 items
+
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[absoluto] FAILED [  7%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[padre] FAILED [ 15%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[relativo] FAILED [ 23%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[subcarpeta] FAILED [ 30%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[vacio] FAILED [ 38%]
+tests/test_rutas_experimentos.py::test_compute_metrics_acepta_una_corrida_de_runs PASSED [ 46%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[secur] FAILED [ 53%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[../../../fuera] FAILED [ 61%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[/fuera] FAILED [ 69%]
+tests/test_rutas_experimentos.py::test_new_run_dir_crea_la_corrida_dentro_de_runs PASSED [ 76%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t02] FAILED [ 84%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t04] FAILED [ 92%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t05] FAILED [100%]
+
+========================= 11 failed, 2 passed in 0.10s =========================
+(codigo de salida de pytest: 1)
