@@ -1,9 +1,9 @@
 # Seguridad del proyecto — evidencia del laboratorio
 
 Lab. No. 05 (FDSI): seguridad en el ciclo de desarrollo. Este registro cubre los
-puntos 1 a 6 del enunciado (alcance, controles nativos, SAST + secretos, SCA, DAST
-pasivo y validación manual) y la corrección del punto 7 (F-07 y F-08). Falta
-registrar el reescaneo de CodeQL de esa corrección y el punto 8 (presentación).
+puntos 1 a 7 del enunciado (alcance, controles nativos, SAST + secretos, SCA, DAST
+pasivo, validación manual y corrección con reescaneo). El punto 8 (presentación)
+sigue pendiente.
 
 ## 1. Alcance autorizado
 - Repositorio: https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5 (público, cuenta personal)
@@ -38,8 +38,8 @@ C4/C5, que depende de que la clave HMAC no sea la de desarrollo (F-05).
 ## 2. Línea base y herramientas
 | Herramienta | Tipo | Fecha | Resultado | Enlace a evidencia |
 |---|---|---|---|---|
-| Semgrep 1.182.0 (`p/owasp-top-ten` + `p/secrets`) | SAST | 21/10/2026 | Actions, PR #1: 115 archivos, 17 hallazgos (1 ERROR, 2 MEDIUM, 14 WARNING), 0 errores de análisis. Triage en la sección 3. | [Run 39690739269](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/actions/runs/39690739269) · [`resultado-semgrep.zip`](lab5/evidencia/actions-pr1/resultado-semgrep.zip) |
-| CodeQL 2.27.3, Default setup (Python) | SAST | 21/10/2026 y 02/11/2026 | Suite `default`, amenazas `remote`: 43 reglas y 0 resultados en la línea base `6291230` (21/10) y en el merge del PR #1 `b7117a3` (02/11). Suite `extended`, amenazas `remote_and_local` (desde el 02/11): 50 reglas y 9 alertas `py/path-injection` sobre `b7117a3`; 7 siguen abiertas y 2 se descartaron como falso positivo. Análisis semanal y en cada push a `main`. | [Code scanning](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/security/code-scanning) · capturas [04](lab5/evidencia/capturas/04-code-scanning-default.webp), [05](lab5/evidencia/capturas/05-codeql-tool-status.webp), [06](lab5/evidencia/capturas/06-code-scanning-extended.webp), [07](lab5/evidencia/capturas/07-codeql-config-extended.webp) y [08](lab5/evidencia/capturas/08-codeql-alerta-6-falso-positivo.webp) |
+| Semgrep 1.182.0 y 1.183.0 (`p/owasp-top-ten` + `p/secrets`) | SAST | 21/10/2026 y 03/11/2026 | Actions, PR #1: 115 archivos, 17 hallazgos (1 ERROR, 2 MEDIUM, 14 WARNING), 0 errores de análisis. Antes y después de la corrección del punto 7 (`main` en `939f78d` y en `a881b53`): 22 hallazgos con la misma distribución y ninguno en `experiments/` ni en `tests/`. Los 5 nuevos frente al PR #1 son enlaces HTTP del informe de ZAP. Triage en la sección 3. | [Run 39690739269](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/actions/runs/39690739269) · [`resultado-semgrep.zip`](lab5/evidencia/actions-pr1/resultado-semgrep.zip) · runs [41737876034](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/actions/runs/41737876034) y [41742766519](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/actions/runs/41742766519) |
+| CodeQL 2.27.3 y 2.27.4, Default setup (Python; también GitHub Actions desde el 03/11) | SAST | 21/10/2026 a 03/11/2026 | Suite `default`, amenazas `remote`: 43 reglas y 0 resultados en la línea base `6291230` (21/10) y en el merge del PR #1 `b7117a3` (02/11). Suite `extended`, amenazas `remote_and_local` (desde el 02/11): 50 reglas y 9 alertas `py/path-injection` sobre `b7117a3`, de las que 2 se descartaron como falso positivo. Tras la corrección del punto 7 (`a881b53`, 03/11): 0 resultados de Python, y las otras 7 pasaron a *Fixed*. El análisis de GitHub Actions abrió la alerta #10 (`actions/unpinned-tag`, F-02). Análisis semanal y en cada push a `main`. | [Code scanning](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/security/code-scanning) · capturas [04](lab5/evidencia/capturas/04-code-scanning-default.webp), [05](lab5/evidencia/capturas/05-codeql-tool-status.webp), [06](lab5/evidencia/capturas/06-code-scanning-extended.webp), [07](lab5/evidencia/capturas/07-codeql-config-extended.webp) y [08](lab5/evidencia/capturas/08-codeql-alerta-6-falso-positivo.webp) |
 | Gitleaks (gitleaks-action v3) | Secretos | 21/10/2026 | Actions, PR #1: "No leaks detected" sobre todo el historial (`fetch-depth: 0`). También en verde en el push a `main` del 02/11/2026. | [Run 39690739269](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/actions/runs/39690739269) · [captura](lab5/evidencia/capturas/01-actions-pr1.webp) |
 | GitHub Secret Protection + push protection | Secretos | 21/10/2026 | Activados (API y captura) | [captura 03](lab5/evidencia/capturas/03-settings-ai-secret-protection.webp) |
 | Dependabot alerts | SCA | 21/10/2026 y 02/11/2026 | 0 alertas en la línea base. Desde el merge del PR #1 (02/11): 8 alertas, todas sobre los archivos de evidencia `docs/lab5/evidencia/requirements-*.txt` y ninguna sobre `pyproject.toml`: 7 de `chromadb` (4 CVE distintos) y 1 de `pytest` (CVE-2025-71176), que originó el PR #2. Tras el triage del 02/11, las 7 de `chromadb` quedaron descartadas como *not used* y la de `pytest` sigue abierta (F-04); el PR #2 se cerró sin fusionar. Detalle en la sección 3. | [Dependabot](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/security/dependabot) · capturas [09](lab5/evidencia/capturas/09-dependabot-alertas.webp), [10](lab5/evidencia/capturas/10-dependabot-chromadb-descartadas.webp) y [11](lab5/evidencia/capturas/11-pr2-cerrado.webp) |
@@ -82,12 +82,17 @@ terminan en `|| true` y nunca fallan. El de Gitleaks sí falla si encuentra un s
   mismo commit `b7117a3` dio 9 alertas `py/path-injection`, todas con origen en los
   argumentos de línea de comandos de los scripts de `experiments/`. CodeQL las
   califica `high`; en este proyecto el riesgo es bajo (triage en la sección 3).
-- La página de estado de CodeQL muestra "GitHub Actions: 1/1 file scanned"
+- Hasta el 02/11, CodeQL solo analizaba Python. La página de estado mostraba
+  "GitHub Actions: 1/1 file scanned"
   ([captura 05](lab5/evidencia/capturas/05-codeql-tool-status.webp)), pero en la
-  configuración el lenguaje GitHub Actions está sin marcar
-  ([captura 07](lab5/evidencia/capturas/07-codeql-config-extended.webp)): la API
-  devuelve `languages: ["python"]`, los análisis registrados son solo de Python y
-  ninguna alerta de CodeQL toca los workflows. F-02 y F-06 solo los detecta Semgrep.
+  configuración el lenguaje GitHub Actions estaba sin marcar
+  ([captura 07](lab5/evidencia/capturas/07-codeql-config-extended.webp)) y la API
+  devolvía `languages: ["python"]`.
+- Desde el 03/11 a la 01:15 UTC, la configuración incluye también `actions`. Ese
+  análisis abrió la alerta #10 (`actions/unpinned-tag`, severidad media) por
+  `gitleaks/gitleaks-action@v3`, en `.github/workflows/seguridad-estatica.yml:62`:
+  es parte de F-02. CodeQL solo marca la acción de terceros, mientras que Semgrep
+  marca las 8 etiquetas mutables. F-06 sigue detectándolo solo Semgrep.
 - Ni CodeQL ni Semgrep señalaron `src/memlab/memory/retriever.py`, donde el perfil
   Unsecure recupera memorias sin filtrar por usuario. Es una falla de lógica de
   autorización: el laboratorio la mide con T02, no con SAST.
@@ -115,15 +120,16 @@ terminan en `|| true` y nunca fallan. El de Gitleaks sí falla si encuentra un s
 | ID | Categoría | Descripción sin secretos | Riesgo | Archivo/ruta | Cambio propuesto | Estado |
 |---|---|---|---|---|---|---|
 | F-01 | SAST · CWE-250 | El contenedor corre como `root`: el `Dockerfile` no define `USER` (Semgrep `dockerfile.security.missing-user`). | Medio | `Dockerfile:16` | Crear un usuario sin privilegios y añadir `USER` antes de `CMD`. | Abierto |
-| F-02 | SAST · CWE-1357 | Las acciones de GitHub se referencian por etiqueta mutable (`@v4`, `@v5`, `@v3`), no por SHA (Semgrep `github-actions-mutable-action-tag`). | Bajo | `.github/workflows/seguridad-estatica.yml` | Fijar cada acción a su SHA; Dependabot (`github-actions`) las mantiene al día. | Abierto |
+| F-02 | SAST · CWE-1357 | Las acciones de GitHub se referencian por etiqueta mutable (`@v4`, `@v5`, `@v3`), no por SHA (Semgrep `github-actions-mutable-action-tag`). Desde el 03/11, CodeQL también lo marca, pero solo para `gitleaks/gitleaks-action@v3` (alerta #10, `actions/unpinned-tag`). | Bajo | `.github/workflows/seguridad-estatica.yml` | Fijar cada acción a su SHA; Dependabot (`github-actions`) las mantiene al día. | Abierto |
 | F-03 | SCA · CVE-2026-45829/45830/45831/45833 | `chromadb` tiene ejecución de código y falta de aislamiento entre tenants **en su servidor HTTP**. Tres avisos afectan a todo el rango `>=0.5.0`, y CVE-2026-45829 desde la 1.0.0. Sin versión corregida (Dependabot #2 a #8). | No aplica | `pyproject.toml` | Ninguno inmediato: ver análisis abajo. Vigilar el aviso. | Aceptado (en Dependabot, descartadas como *not used*) |
 | F-04 | SCA · CVE-2025-71176 | `pytest` ≤ 9.0.2 usa `/tmp/pytest-of-{usuario}` de forma insegura en UNIX. El rango `pytest>=8.0` lo permite (Dependabot #1). | Bajo | `pyproject.toml` (extra `dev`) | Subir el piso a `pytest>=9.0.3`. El PR #2 de Dependabot se cerró sin fusionar (ver análisis abajo). | Abierto |
 | F-05 | Revisión manual · CWE-798 | Clave HMAC de desarrollo fija en el código; se usa en silencio si no se exporta `MEMLAB_HMAC_KEY`. Semgrep `p/secrets` no la detectó. | Medio | `src/memlab/config.py:37` | Exigir la variable en corridas oficiales (fallar si falta) o dejar constancia en el manifiesto. | Abierto |
 | F-06 | SAST · CWE-829 | `dependabot.yml` no define `cooldown`: Dependabot propone una versión el mismo día en que se publica, sin margen para detectar un paquete comprometido (Semgrep `dependabot-missing-cooldown`). Lo introdujo el `dependabot.yml` agregado en este laboratorio. Hoy no tiene efecto práctico: `cooldown` solo aplica a las actualizaciones de versión, que están apagadas. | Bajo | `.github/dependabot.yml:5` y `:11` | Añadir `cooldown` con `default-days: 7` a cada ecosistema. | Abierto |
-| F-07 | SAST (CodeQL) · CWE-22 | `compute_metrics.py <corrida>` no valida el nombre de la corrida: con `../` lee `results.json` y `manifest.json` y escribe `<corrida>.json` fuera de `evidence/` (alertas #2, #8 y #9, `py/path-injection`). | Bajo | `experiments/compute_metrics.py:178-180` y `:191` | Aceptar solo nombres de carpetas que estén directamente en `evidence/runs/`. Hecho con `child_path()` (`experiments/_common.py`), al leer y al escribir. | Corregido (punto 7) |
+| F-07 | SAST (CodeQL) · CWE-22 | `compute_metrics.py <corrida>` no valida el nombre de la corrida: con `../` lee `results.json` y `manifest.json` y escribe `<corrida>.json` fuera de `evidence/` (alertas #2, #8 y #9, `py/path-injection`). | Bajo | `experiments/compute_metrics.py:178-180` y `:191` | Aceptar solo nombres de carpetas que estén directamente en `evidence/runs/`. Hecho con `child_path()` (`experiments/_common.py`), al leer y al escribir; desde F-11 también rechaza enlaces simbólicos. | Corregido (punto 7) |
 | F-08 | SAST (CodeQL) · CWE-22 | `run_t02.py`, `run_t04.py` y `run_t05.py` usan `--profile` para crear la carpeta de la corrida y vaciar su `data/` (`shutil.rmtree`) antes de validarlo con `Profile(...)`. `run_t01.py` sí valida primero (alertas #1, #3, #4 y #5, `py/path-injection`). | Bajo | `experiments/_common.py:30` y `:60-62`, desde `run_t02.py:45-47`, `run_t04.py:46-48` y `run_t05.py:67-69` | Validar el perfil antes de usarlo. Hecho en `new_run_dir()` (`experiments/_common.py`), que usan los cuatro runners; `choices` en `argparse` no bastaba, porque no revisa el valor por defecto que viene de `MEMLAB_PROFILE`. | Corregido (punto 7) |
 | F-09 | DAST (ZAP) · CWE-693 | La API de Ollama no envía `X-Content-Type-Options` ni `Cross-Origin-Resource-Policy` (reglas 10021 y 90004 de ZAP). | Bajo | `http://localhost:11434/` (Ollama 0.34.2) | Ninguno: es un componente de terceros, escucha solo en loopback y lo consume `httpx`, no un navegador. Si algún día se expusiera, iría detrás de un proxy que agregue encabezados y autenticación. | Aceptado |
 | F-10 | Validación manual · CWE-306 | La API de Ollama no exige autenticación: cualquier proceso del equipo, incluidos los contenedores, puede consultarla y usar el modelo (así lo hace `memlab`, sin credenciales). Lo mitigan dos controles validados: escucha solo en `127.0.0.1` y rechaza con 403 los `Origin` de otros sitios. | Bajo | `http://localhost:11434/api/*` (Ollama 0.34.2) | Mantener Ollama en loopback y no ampliar `OLLAMA_ORIGINS`; si se expone, ponerlo detrás de un proxy con autenticación y TLS (ver sección 5). | Aceptado |
+| F-11 | Revisión de código (Codex) · CWE-59 | La primera versión de `child_path()` comparaba las rutas solo como texto. Un enlace simbólico dentro de `evidence/runs/` o `evidence/metrics/` que apuntara fuera pasaba la validación, y `compute()` leía o sobrescribía a través de él. Git guarda enlaces simbólicos, así que uno podía llegar en un commit. | Bajo | `experiments/_common.py:38-39` | Resolver los enlaces con `os.path.realpath` antes de comprobar el prefijo. | Corregido (punto 7) |
 
 ### Triage de Semgrep (punto 3)
 
@@ -149,6 +155,11 @@ Los 17 hallazgos de Actions (PR #1) salen de tres reglas:
 - La corrida local del 21/10 dio 12 hallazgos y Actions 17. La diferencia son las
   3 acciones del job `sca` y las 2 entradas de `dependabot.yml`, que se agregaron
   después de esa corrida local.
+- Desde el punto 5, Actions da 22 hallazgos: los 17 anteriores más 5 de
+  `html.security.plaintext-http-link` en `docs/lab5/evidencia/zap-local/zap-report.html`.
+  Son **falsas alarmas**: son los enlaces a la URL escaneada
+  (`http://host.docker.internal:11434`) dentro del informe de ZAP, que es un
+  archivo de evidencia y no una página que se publique.
 
 ### Triage de CodeQL (suite `extended`, amenazas `remote_and_local`)
 
@@ -174,10 +185,10 @@ CodeQL. El origen siempre es `parse_args()` de un script de `experiments/`:
   es un error de tipeo: `make t02 PROFILE=secur` deja en `evidence/runs/` una
   carpeta sin resultados antes de fallar.
 - F-07 y F-08 se corrigieron en el punto 7 (sección 4): el arreglo es pequeño y no
-  cambia los resultados de las corridas válidas. Sus siete alertas siguen abiertas
-  hasta que CodeQL reanalice `main`
-  ([captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp) muestra las
-  9 antes del triage).
+  cambia los resultados de las corridas válidas. Sus siete alertas pasaron a *Fixed*
+  cuando CodeQL reanalizó `main` después del merge del PR #6 (03/11, 23:54 UTC).
+  La [captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp) muestra
+  las 9 antes del triage.
 
 ### Análisis SCA (punto 4)
 
@@ -299,30 +310,45 @@ que ejecutó ZAP (`zap.yaml`) y la salida de consola están en
 
 ## 4. Validación antes y después
 - Evidencia inicial (captura o artefacto): Actions del PR #1 (run 39690739269), corridas locales del 21/10/2026 (ver sección 2) y, del 02/11/2026, las 9 alertas de CodeQL ([captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp)) y las 8 de Dependabot ([captura 09](lab5/evidencia/capturas/09-dependabot-alertas.webp)). El informe ZAP local del 03/11/2026 es la línea base del DAST ([`zap-local/`](lab5/evidencia/zap-local/)).
-- Pull request con corrección: rama `security/lab-fsi-remediacion`. Corrige F-07 y
-  F-08 sin tocar `src/memlab`:
+- Pull requests con corrección: el
+  [#6](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/6)
+  (F-07 y F-08), fusionado el 03/11/2026 como `a881b53`, y el de la rama
+  `security/lab-fsi-enlaces` (F-11, el hueco que encontró la revisión de Codex en
+  el #6). Ninguno toca `src/memlab`:
   - `child_path()` (`experiments/_common.py`) arma la ruta dentro de la carpeta
-    base y rechaza `..`, rutas absolutas y subcarpetas. Normaliza la ruta y
-    comprueba su prefijo, que es el patrón que CodeQL recomienda para
-    `py/path-injection`.
+    base y rechaza `..`, rutas absolutas, subcarpetas y enlaces simbólicos que
+    apunten fuera. Resuelve la ruta con `os.path.realpath` y comprueba su prefijo,
+    que es el patrón que CodeQL recomienda para `py/path-injection`.
   - `compute()` (`experiments/compute_metrics.py`) la usa al leer
     `evidence/runs/<corrida>` y al escribir `evidence/metrics/<corrida>.json`.
   - `new_run_dir()` valida el perfil con `Profile` antes de crear la carpeta, así
     que un perfil mal escrito ya no deja carpetas ni vacía `data/`.
-- Prueba de regresión: `tests/test_rutas_experimentos.py`, 13 casos con carpetas
-  temporales y sin modelo. Sobre `main` sin la corrección fallan 11 y pasan 2; con
-  la corrección pasan los 13. `make test` da 43 de 43. Las salidas están en
+- Prueba de regresión: `tests/test_rutas_experimentos.py`, 15 casos con carpetas
+  temporales y sin modelo. Sobre `main` sin ninguna corrección, 11 de los 13
+  primeros fallaban; los 2 de enlaces simbólicos fallaban todavía con la
+  corrección de F-07 y F-08. Con las dos correcciones pasan los 15, y `make test`
+  da 45 de 45. Las salidas están en
   [`docs/lab5/evidencia/remediacion/`](lab5/evidencia/remediacion/).
 - Corridas válidas: `make metrics` recalculó las métricas de todas las corridas de
   `evidence/runs/`, y quedaron idénticas a las versionadas.
 - Desde la línea de comandos: `compute_metrics.py ../fuera` y
   `run_t02.py --profile secur` terminan con código 1 sin leer, escribir ni crear
   nada; `evidence/runs/` sigue con las mismas 12 carpetas.
-- Evidencia de reescaneo: pendiente. CodeQL analiza el PR y, después del merge,
-  `main`; ahí debe verse si las 7 alertas de F-07 y F-08 pasan a *Fixed*.
+- Evidencia de reescaneo:
+  - CodeQL 2.27.4, la misma versión antes y después: el análisis de Python de
+    `main` pasó de 9 resultados (`939f78d`) a 0 (`a881b53`). Las alertas #1 a #5,
+    #8 y #9 quedaron *Fixed* el 03/11/2026 a las 23:54 UTC; #6 y #7 siguen
+    descartadas y ya no se detectan.
+  - Semgrep 1.183.0 en Actions: 22 hallazgos antes y 22 después, con la misma
+    distribución y ninguno en `experiments/` ni en `tests/`. Semgrep no detectaba
+    F-07 ni F-08, y la corrección no agrega hallazgos. Los JSON de las dos
+    corridas están en `remediacion/`.
+  - SCA y DAST no se repitieron: la corrección no cambia dependencias ni la
+    superficie HTTP.
 - Riesgo residual y decisión: bajo. Quien corre los experimentos sigue
   controlando sus argumentos, pero ya no puede leer ni escribir fuera de
-  `evidence/` ni dejar carpetas sobrantes por un error de tipeo.
+  `evidence/`, tampoco a través de un enlace simbólico, ni dejar carpetas
+  sobrantes por un error de tipeo.
 
 ## 5. Pentest autorizado
 Validación manual del punto 6, hecha el 03/11/2026. Corresponde al hallazgo F-10.

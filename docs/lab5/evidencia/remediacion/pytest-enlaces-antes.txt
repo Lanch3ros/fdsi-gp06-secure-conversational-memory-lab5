@@ -1,0 +1,25 @@
+# Prueba de regresion con los casos de enlaces simbolicos (F-11) ANTES de su correccion
+# Codigo: main a881b53 (ya con la correccion de F-07 y F-08) + 2 pruebas nuevas
+# Fecha: 2026-11-04T00:04:03Z
+$ .venv/bin/python -m pytest -v --tb=no --no-header -rN -p no:cacheprovider tests/test_rutas_experimentos.py
+============================= test session starts ==============================
+collecting ... collected 15 items
+
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[absoluto] PASSED [  6%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[padre] PASSED [ 13%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[relativo] PASSED [ 20%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[subcarpeta] PASSED [ 26%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[vacio] PASSED [ 33%]
+tests/test_rutas_experimentos.py::test_compute_metrics_acepta_una_corrida_de_runs PASSED [ 40%]
+tests/test_rutas_experimentos.py::test_compute_metrics_no_lee_a_traves_de_un_enlace_en_runs FAILED [ 46%]
+tests/test_rutas_experimentos.py::test_compute_metrics_no_escribe_a_traves_de_un_enlace_en_metrics FAILED [ 53%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[secur] PASSED [ 60%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[../../../fuera] PASSED [ 66%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[/fuera] PASSED [ 73%]
+tests/test_rutas_experimentos.py::test_new_run_dir_crea_la_corrida_dentro_de_runs PASSED [ 80%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t02] PASSED [ 86%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t04] PASSED [ 93%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t05] PASSED [100%]
+
+========================= 2 failed, 13 passed in 0.04s =========================
+(codigo de salida de pytest: 1)

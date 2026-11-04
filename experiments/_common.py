@@ -30,12 +30,13 @@ def child_path(base: Path, name: str) -> Path:
     """`base / name`, solo si `name` queda directamente dentro de `base`.
 
     Los nombres de corrida y los perfiles llegan de la linea de comandos (F-07 y
-    F-08, CodeQL py/path-injection). Se rechaza `..`, una ruta absoluta o una
-    subcarpeta. Normalizar la ruta y comprobar su prefijo es la validacion que
-    CodeQL reconoce para esa regla.
+    F-08, CodeQL py/path-injection). Se rechaza `..`, una ruta absoluta, una
+    subcarpeta o un enlace simbolico que apunte fuera (F-11): realpath resuelve
+    los enlaces antes de comprobar el prefijo. Resolver la ruta y comprobar su
+    prefijo es la validacion que CodeQL reconoce para esa regla.
     """
-    root = os.path.normpath(base)
-    path = os.path.normpath(os.path.join(root, name))
+    root = os.path.realpath(base)
+    path = os.path.realpath(os.path.join(root, name))
     if not path.startswith(root + os.sep):
         raise SystemExit(f"nombre no valido, sale de {base}: {name!r}")
     if os.path.dirname(path) != root:
