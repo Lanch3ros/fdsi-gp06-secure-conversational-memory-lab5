@@ -65,6 +65,27 @@ def test_compute_metrics_acepta_una_corrida_de_runs(evidencia):
     assert (metrics / f"{VALIDA}.json").is_file()
 
 
+# F-11 (revision de Codex en el PR #6): una comprobacion solo de texto deja pasar
+# un enlace simbolico que esta dentro de la carpeta pero apunta fuera.
+def test_compute_metrics_no_lee_a_traves_de_un_enlace_en_runs(evidencia):
+    tmp, metrics = evidencia
+    (tmp / "evidence" / "runs" / "enlace").symlink_to(tmp / "evidence" / "fuera")
+    with pytest.raises(SystemExit, match="nombre no valido"):
+        compute_metrics.compute("enlace")
+    assert not metrics.exists()
+
+
+def test_compute_metrics_no_escribe_a_traves_de_un_enlace_en_metrics(evidencia):
+    tmp, metrics = evidencia
+    metrics.mkdir()
+    victima = tmp / "evidence" / "fuera" / "victima.json"
+    victima.write_text("original", encoding="utf-8")
+    (metrics / f"{VALIDA}.json").symlink_to(victima)
+    with pytest.raises(SystemExit, match="nombre no valido"):
+        compute_metrics.compute(VALIDA)
+    assert victima.read_text(encoding="utf-8") == "original"
+
+
 @pytest.mark.parametrize("perfil", ["secur", "../../../fuera", "/fuera"])
 def test_new_run_dir_rechaza_perfiles_no_validos(tmp_path, perfil):
     with pytest.raises(ValueError):
