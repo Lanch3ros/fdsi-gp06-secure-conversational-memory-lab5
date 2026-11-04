@@ -12,10 +12,17 @@ IFACE=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')
 LANIP=$(ipconfig getifaddr "$IFACE" 2>/dev/null || true)
 FALLAS=0
 
-# probar <id> <esperado> <descripcion> <url> [cabecera]
+# Sin archivo de salida no hay evidencia: se falla antes de probar nada.
+if ! : > "$OUT"; then
+  echo "FALLA: no se puede escribir el archivo de salida: $OUT" >&2
+  exit 1
+fi
+
+# probar <id> <esperado> <descripcion> <url> [cabecera] [encabezado-esperado]
 # <esperado> es un codigo HTTP, o "sin-conexion" si no debe poder conectarse.
+# [encabezado-esperado] es una linea que tiene que aparecer en la respuesta.
 probar() {
-  local id="$1" esperado="$2" desc="$3" url="$4" cabecera="${5:-}"
+  local id="$1" esperado="$2" desc="$3" url="$4" cabecera="${5:-}" encabezado="${6:-}"
   local args=(-sSi --max-time 5) muestra="curl -sSi"
   if [ -n "$cabecera" ]; then
     args+=(-H "$cabecera")
@@ -32,10 +39,14 @@ probar() {
   else
     obtenido=$(printf '%s\n' "$resp" | head -1 | awk '{print $2}')
   fi
-  if [ "$obtenido" = "$esperado" ]; then
-    echo "=> esperado: $esperado | obtenido: $obtenido | OK"
+  local falta=""
+  if [ -n "$encabezado" ] && ! printf '%s\n' "$resp" | tr -d '\r' | grep -qixF "$encabezado"; then
+    falta=" sin '$encabezado'"
+  fi
+  if [ "$obtenido" = "$esperado" ] && [ -z "$falta" ]; then
+    echo "=> esperado: $esperado${encabezado:+ con '$encabezado'} | obtenido: $obtenido | OK"
   else
-    echo "=> esperado: $esperado | obtenido: $obtenido (curl: $rc) | FALLA"
+    echo "=> esperado: $esperado${encabezado:+ con '$encabezado'} | obtenido: $obtenido$falta (curl: $rc) | FALLA"
     FALLAS=$((FALLAS + 1))
   fi
   echo
@@ -62,7 +73,7 @@ probar() {
     FALLAS=$((FALLAS + 1))
   fi
   probar P4 403 "GET /api/version con el Origin de otro sitio, como lo enviaria un navegador" "$BASE/api/version" "Origin: http://evil.local"
-  probar P5 200 "GET /api/version con un Origin local (control)" "$BASE/api/version" "Origin: http://localhost:3000"
+  probar P5 200 "GET /api/version con un Origin local (control)" "$BASE/api/version" "Origin: http://localhost:3000" "Access-Control-Allow-Origin: http://localhost:3000"
   if [ "$FALLAS" -eq 0 ]; then
     echo "## Resultado: las 5 pruebas dieron lo esperado"
   else

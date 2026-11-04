@@ -33,9 +33,13 @@ def child_path(base: Path, name: str) -> Path:
     F-08, CodeQL py/path-injection). Se rechaza `..`, una ruta absoluta, una
     subcarpeta o un enlace simbolico que apunte fuera (F-11): realpath resuelve
     los enlaces antes de comprobar el prefijo. Resolver la ruta y comprobar su
-    prefijo es la validacion que CodeQL reconoce para esa regla.
+    prefijo es la validacion que CodeQL reconoce para esa regla. La base tampoco
+    puede ser ni atravesar un enlace: realpath la moveria fuera de evidence/ y el
+    prefijo dejaria de proteger.
     """
     root = os.path.realpath(base)
+    if root != os.path.abspath(base):
+        raise SystemExit(f"carpeta base no valida, es o atraviesa un enlace simbolico: {base}")
     path = os.path.realpath(os.path.join(root, name))
     if not path.startswith(root + os.sep):
         raise SystemExit(f"nombre no valido, sale de {base}: {name!r}")

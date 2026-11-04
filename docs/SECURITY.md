@@ -1,14 +1,14 @@
 # Seguridad del proyecto — evidencia del laboratorio
 
 Lab. No. 05 (FDSI): seguridad en el ciclo de desarrollo. Este registro cubre los
-puntos 1 a 7 del enunciado (alcance, controles nativos, SAST + secretos, SCA, DAST
-pasivo, validación manual y corrección con reescaneo). El punto 8 (presentación)
-sigue pendiente.
+ocho puntos del enunciado. El informe de hallazgos está en
+[`REPORTE_HALLAZGOS.md`](REPORTE_HALLAZGOS.md), y el guion de la demostración, en
+[`lab5/presentacion.md`](lab5/presentacion.md).
 
 ## 1. Alcance autorizado
 - Repositorio: https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5 (público, cuenta personal)
 - Rama evaluada y commit de línea base: `main` / `6291230868533ff5c4a99ba0895638ab97079e39`
-- Rama del laboratorio: `security/lab-fsi`
+- Rama del laboratorio: `security/lab-fsi` (PR #1). Cada entrega posterior tuvo su propia rama y su PR (sección 6).
 - URL de staging propio (si aplica): no hay. El proyecto no expone servicio web (ver abajo). Para el DAST del punto 5 se usó la alternativa local que permite el enunciado: ZAP Baseline con Docker contra la API de Ollama del laboratorio en `localhost:11434` (sección 3).
 - Responsables: Isaac David Burgos Cervantes · Jose Luis Lancheros Aroya · Gina Sofía García Zapata (FDSI-GP-06).
 - Autorización: repositorio y entorno propios del equipo, 21/10/2026.
@@ -129,7 +129,7 @@ terminan en `|| true` y nunca fallan. El de Gitleaks sí falla si encuentra un s
 | F-08 | SAST (CodeQL) · CWE-22 | `run_t02.py`, `run_t04.py` y `run_t05.py` usan `--profile` para crear la carpeta de la corrida y vaciar su `data/` (`shutil.rmtree`) antes de validarlo con `Profile(...)`. `run_t01.py` sí valida primero (alertas #1, #3, #4 y #5, `py/path-injection`). | Bajo | `experiments/_common.py:30` y `:60-62`, desde `run_t02.py:45-47`, `run_t04.py:46-48` y `run_t05.py:67-69` | Validar el perfil antes de usarlo. Hecho en `new_run_dir()` (`experiments/_common.py`), que usan los cuatro runners; `choices` en `argparse` no bastaba, porque no revisa el valor por defecto que viene de `MEMLAB_PROFILE`. | Corregido (punto 7) |
 | F-09 | DAST (ZAP) · CWE-693 | La API de Ollama no envía `X-Content-Type-Options` ni `Cross-Origin-Resource-Policy` (reglas 10021 y 90004 de ZAP). | Bajo | `http://localhost:11434/` (Ollama 0.34.2) | Ninguno: es un componente de terceros, escucha solo en loopback y lo consume `httpx`, no un navegador. Si algún día se expusiera, iría detrás de un proxy que agregue encabezados y autenticación. | Aceptado |
 | F-10 | Validación manual · CWE-306 | La API de Ollama no exige autenticación: cualquier proceso del equipo, incluidos los contenedores, puede consultarla y usar el modelo (así lo hace `memlab`, sin credenciales). Lo mitigan dos controles validados: escucha solo en `127.0.0.1` y rechaza con 403 los `Origin` de otros sitios. | Bajo | `http://localhost:11434/api/*` (Ollama 0.34.2) | Mantener Ollama en loopback y no ampliar `OLLAMA_ORIGINS`; si se expone, ponerlo detrás de un proxy con autenticación y TLS (ver sección 5). | Aceptado |
-| F-11 | Revisión de código (Codex) · CWE-59 | La primera versión de `child_path()` comparaba las rutas solo como texto. Un enlace simbólico dentro de `evidence/runs/` o `evidence/metrics/` que apuntara fuera pasaba la validación, y `compute()` leía o sobrescribía a través de él. Git guarda enlaces simbólicos, así que uno podía llegar en un commit. | Bajo | `experiments/_common.py:38-39` | Resolver los enlaces con `os.path.realpath` antes de comprobar el prefijo. | Corregido (punto 7) |
+| F-11 | Revisión de código (Codex) · CWE-59 | La primera versión de `child_path()` comparaba las rutas solo como texto: un enlace simbólico dentro de `evidence/runs/` o `evidence/metrics/` que apuntara fuera pasaba la validación, y `compute()` leía o sobrescribía a través de él. Una segunda revisión encontró lo mismo con la propia carpeta base: si era un enlace, `realpath` tomaba su destino como raíz. Git guarda enlaces simbólicos, así que uno podía llegar en un commit. | Bajo | `experiments/_common.py:40-43` | Resolver los enlaces con `os.path.realpath` antes de comprobar el prefijo (PR #7) y rechazar una carpeta base que sea o atraviese un enlace (rama `security/lab-fsi-reporte`). | Corregido |
 
 ### Triage de Semgrep (punto 3)
 
@@ -312,22 +312,26 @@ que ejecutó ZAP (`zap.yaml`) y la salida de consola están en
 - Evidencia inicial (captura o artefacto): Actions del PR #1 (run 39690739269), corridas locales del 21/10/2026 (ver sección 2) y, del 02/11/2026, las 9 alertas de CodeQL ([captura 06](lab5/evidencia/capturas/06-code-scanning-extended.webp)) y las 8 de Dependabot ([captura 09](lab5/evidencia/capturas/09-dependabot-alertas.webp)). El informe ZAP local del 03/11/2026 es la línea base del DAST ([`zap-local/`](lab5/evidencia/zap-local/)).
 - Pull requests con corrección: el
   [#6](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/6)
-  (F-07 y F-08), fusionado el 03/11/2026 como `a881b53`, y el de la rama
-  `security/lab-fsi-enlaces` (F-11, el hueco que encontró la revisión de Codex en
-  el #6). Ninguno toca `src/memlab`:
+  (F-07 y F-08), fusionado el 03/11/2026 como `a881b53`; el
+  [#7](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/7)
+  (F-11), fusionado como `44083ac`; y el de la rama `security/lab-fsi-reporte`,
+  que cierra la segunda parte de F-11. Los dos huecos de F-11 los encontró la
+  revisión de Codex del #6 y del #7. Ninguno toca `src/memlab`:
   - `child_path()` (`experiments/_common.py`) arma la ruta dentro de la carpeta
     base y rechaza `..`, rutas absolutas, subcarpetas y enlaces simbólicos que
     apunten fuera. Resuelve la ruta con `os.path.realpath` y comprueba su prefijo,
-    que es el patrón que CodeQL recomienda para `py/path-injection`.
+    que es el patrón que CodeQL recomienda para `py/path-injection`. Además exige
+    que la carpeta base no sea ni atraviese un enlace.
   - `compute()` (`experiments/compute_metrics.py`) la usa al leer
     `evidence/runs/<corrida>` y al escribir `evidence/metrics/<corrida>.json`.
   - `new_run_dir()` valida el perfil con `Profile` antes de crear la carpeta, así
     que un perfil mal escrito ya no deja carpetas ni vacía `data/`.
-- Prueba de regresión: `tests/test_rutas_experimentos.py`, 15 casos con carpetas
+- Prueba de regresión: `tests/test_rutas_experimentos.py`, 17 casos con carpetas
   temporales y sin modelo. Sobre `main` sin ninguna corrección, 11 de los 13
-  primeros fallaban; los 2 de enlaces simbólicos fallaban todavía con la
-  corrección de F-07 y F-08. Con las dos correcciones pasan los 15, y `make test`
-  da 45 de 45. Las salidas están en
+  primeros fallaban. Los 2 de enlaces dentro de la carpeta fallaban todavía con la
+  corrección de F-07 y F-08, y los 2 de carpeta base enlazada, con la primera
+  corrección de F-11. Con todas las correcciones pasan los 17, y `make test` da 47
+  de 47. Las salidas están en
   [`docs/lab5/evidencia/remediacion/`](lab5/evidencia/remediacion/).
 - Corridas válidas: `make metrics` recalculó las métricas de todas las corridas de
   `evidence/runs/`, y quedaron idénticas a las versionadas.
@@ -348,7 +352,9 @@ que ejecutó ZAP (`zap.yaml`) y la salida de consola están en
 - Riesgo residual y decisión: bajo. Quien corre los experimentos sigue
   controlando sus argumentos, pero ya no puede leer ni escribir fuera de
   `evidence/`, tampoco a través de un enlace simbólico, ni dejar carpetas
-  sobrantes por un error de tipeo.
+  sobrantes por un error de tipeo. Queda una ventana que no se cubre: un enlace que
+  alguien cambie entre la comprobación y el uso. Aprovecharla exige poder escribir
+  en `evidence/` mientras corre el script.
 
 ## 5. Pentest autorizado
 Validación manual del punto 6, hecha el 03/11/2026. Corresponde al hallazgo F-10.
@@ -392,7 +398,22 @@ Validación manual del punto 6, hecha el 03/11/2026. Corresponde al hallazgo F-1
   Ollama remoto enviaría el contexto, con las memorias, sin cifrar.
 - **Prueba de regresión:** volver a correr `validar-ollama.sh` después de cualquier
   cambio de configuración de Ollama. El script compara cada respuesta con la
-  esperada (P1, P2 y P5 en `200`, P3 sin conexión y P4 en `403`) y termina con
-  código 1 si alguna no coincide, si Ollama no responde o si P3 no se puede
-  comprobar. Con Ollama apagado da 4 fallas y código 1; con Ollama activo, las 5
-  pruebas pasan y termina con código 0.
+  esperada: P1, P2 y P5 en `200`, P3 sin conexión y P4 en `403`, y en P5 exige
+  además el encabezado `Access-Control-Allow-Origin`. Termina con código 1 si alguna
+  no coincide, si Ollama no responde, si P3 no se puede comprobar o si no puede
+  escribir el archivo de salida. La comprobación del encabezado y la del archivo
+  las pidió la revisión de Codex en el PR #5. Con Ollama activo las 5 pruebas pasan
+  y termina con código 0; los casos de falla están en
+  [`casos-de-falla.txt`](lab5/evidencia/validacion-manual/casos-de-falla.txt).
+
+## 6. Pull requests del laboratorio
+| PR | Rama | Contenido | Fusión (UTC) |
+|---|---|---|---|
+| [#1](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/1) | `security/lab-fsi` | Workflow de SAST, secretos y SCA; primera versión de este registro | 02/11/2026 |
+| [#2](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/2) | rama de Dependabot | Actualización de `pytest` en los archivos de evidencia | Cerrado sin fusionar |
+| [#3](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/3) | `security/lab-fsi-evidencia` | Evidencia y triage de los puntos 2 a 4 | 03/11/2026 |
+| [#4](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/4) | `security/lab-fsi-dast` | DAST pasivo local y validación manual (puntos 5 y 6) | 03/11/2026 |
+| [#5](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/5) | `security/lab-fsi-regresion` | `validar-ollama.sh` como prueba de regresión | 03/11/2026 |
+| [#6](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/6) | `security/lab-fsi-remediacion` | **Corrección de F-07 y F-08** con prueba de regresión (punto 7) | 03/11/2026 |
+| [#7](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/7) | `security/lab-fsi-enlaces` | F-11 y reescaneo del punto 7 | 04/11/2026 |
+| — | `security/lab-fsi-reporte` | Segunda parte de F-11, correcciones de `validar-ollama.sh`, informe y guion (punto 8) | — |
