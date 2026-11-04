@@ -1,0 +1,24 @@
+# validar-ollama.sh: casos en que debe fallar (revision de Codex en el PR #5)
+# Fecha: 2026-11-04T00:17:50Z
+
+## A. El archivo de salida no se puede escribir (Ollama activo)
+$ bash validar-ollama.sh /carpeta-que-no-existe/salida.txt
+docs/lab5/evidencia/validacion-manual/validar-ollama.sh: line 16: /carpeta-que-no-existe/salida.txt: No such file or directory
+FALLA: no se puede escribir el archivo de salida: /carpeta-que-no-existe/salida.txt
+(codigo de salida: 1)
+
+## B. P5 espera un encabezado que Ollama no envia (copia del script con otro origen esperado)
+$ bash variante-encabezado.sh salida.txt
+FALLA: 1 prueba(s) con un resultado distinto del esperado (_b.txt)
+(codigo de salida: 1)
+=> esperado: 200 con 'Access-Control-Allow-Origin: http://otro.local' | obtenido: 200 sin 'Access-Control-Allow-Origin: http://otro.local' (curl: 0) | FALLA
+
+## C. Ollama apagado
+$ bash validar-ollama.sh salida.txt
+FALLA: 4 prueba(s) con un resultado distinto del esperado (_c.txt)
+(codigo de salida: 1)
+=> esperado: 200 | obtenido: sin-conexion (curl: 7) | FALLA
+=> esperado: 200 | obtenido: sin-conexion (curl: 7) | FALLA
+=> esperado: sin-conexion | obtenido: sin-conexion | OK
+=> esperado: 403 | obtenido: sin-conexion (curl: 7) | FALLA
+=> esperado: 200 con 'Access-Control-Allow-Origin: http://localhost:3000' | obtenido: sin-conexion sin 'Access-Control-Allow-Origin: http://localhost:3000' (curl: 7) | FALLA
