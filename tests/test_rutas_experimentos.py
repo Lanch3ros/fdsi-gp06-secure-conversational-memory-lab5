@@ -86,6 +86,31 @@ def test_compute_metrics_no_escribe_a_traves_de_un_enlace_en_metrics(evidencia):
     assert victima.read_text(encoding="utf-8") == "original"
 
 
+# Revision de Codex en el PR #7: si la propia carpeta base es un enlace, realpath
+# la mueve fuera de evidence/ y la comprobacion del prefijo vuelve a pasar.
+def test_compute_metrics_rechaza_runs_si_es_un_enlace(tmp_path, monkeypatch):
+    externa = tmp_path / "externa"
+    _corrida_falsa(externa / VALIDA)
+    (tmp_path / "evidence").mkdir()
+    (tmp_path / "evidence" / "runs").symlink_to(externa)
+    monkeypatch.setattr(compute_metrics, "RUNS", tmp_path / "evidence" / "runs")
+    monkeypatch.setattr(compute_metrics, "METRICS", tmp_path / "evidence" / "metrics")
+    monkeypatch.setattr(compute_metrics, "metrics_t04", lambda results, manifest: {"warnings": []})
+    with pytest.raises(SystemExit, match="enlace simbolico"):
+        compute_metrics.compute(VALIDA)
+    assert not (tmp_path / "evidence" / "metrics").exists()
+
+
+def test_compute_metrics_rechaza_metrics_si_es_un_enlace(evidencia):
+    tmp, metrics = evidencia
+    externa = tmp / "externa"
+    externa.mkdir()
+    metrics.symlink_to(externa)
+    with pytest.raises(SystemExit, match="enlace simbolico"):
+        compute_metrics.compute(VALIDA)
+    assert list(externa.iterdir()) == []
+
+
 @pytest.mark.parametrize("perfil", ["secur", "../../../fuera", "/fuera"])
 def test_new_run_dir_rechaza_perfiles_no_validos(tmp_path, perfil):
     with pytest.raises(ValueError):

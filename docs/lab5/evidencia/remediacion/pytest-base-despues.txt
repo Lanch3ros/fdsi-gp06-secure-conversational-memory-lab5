@@ -1,0 +1,27 @@
+# Prueba de regresion con carpetas base que son enlaces simbolicos, DESPUES de su correccion
+# Codigo: rama security/lab-fsi-reporte (child_path rechaza una base que sea o atraviese un enlace)
+# Fecha: 2026-11-04T00:14:21Z
+$ .venv/bin/python -m pytest -v --tb=no --no-header -rN -p no:cacheprovider tests/test_rutas_experimentos.py
+============================= test session starts ==============================
+collecting ... collected 17 items
+
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[absoluto] PASSED [  5%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[padre] PASSED [ 11%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[relativo] PASSED [ 17%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[subcarpeta] PASSED [ 23%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_nombres_que_salen_de_runs[vacio] PASSED [ 29%]
+tests/test_rutas_experimentos.py::test_compute_metrics_acepta_una_corrida_de_runs PASSED [ 35%]
+tests/test_rutas_experimentos.py::test_compute_metrics_no_lee_a_traves_de_un_enlace_en_runs PASSED [ 41%]
+tests/test_rutas_experimentos.py::test_compute_metrics_no_escribe_a_traves_de_un_enlace_en_metrics PASSED [ 47%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_runs_si_es_un_enlace PASSED [ 52%]
+tests/test_rutas_experimentos.py::test_compute_metrics_rechaza_metrics_si_es_un_enlace PASSED [ 58%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[secur] PASSED [ 64%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[../../../fuera] PASSED [ 70%]
+tests/test_rutas_experimentos.py::test_new_run_dir_rechaza_perfiles_no_validos[/fuera] PASSED [ 76%]
+tests/test_rutas_experimentos.py::test_new_run_dir_crea_la_corrida_dentro_de_runs PASSED [ 82%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t02] PASSED [ 88%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t04] PASSED [ 94%]
+tests/test_rutas_experimentos.py::test_runner_con_perfil_invalido_no_crea_carpetas[run_t05] PASSED [100%]
+
+============================== 17 passed in 0.05s ==============================
+(codigo de salida de pytest: 0)
