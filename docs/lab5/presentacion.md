@@ -1,91 +1,91 @@
-# Demostración de cinco minutos · Lab. No. 05
+# Guion de la sustentación · Lab. No. 05
 
-Guion para la exposición del punto 8. Sigue los seis bloques que pide el enunciado:
-problema, impacto, evidencia, corrección, nueva evidencia y limitaciones. El caso que
-se sigue de punta a punta es el de las rutas de `experiments/` (F-07, F-08 y F-11),
-porque es el que tiene el ciclo completo. El detalle de todo está en
+Guion para la sustentación de hallazgos que pide el profesor: máximo cinco minutos,
+en inglés, con los resultados de los cuatro análisis (SAST, SCA, detección de
+secretos y DAST). En cada uno hay que responder cuatro preguntas: qué encontramos y
+con qué criticidad, cómo lo encontramos, cómo lo solucionamos y cómo lo validamos.
+
+Las diapositivas, con sus notas de orador en inglés, están en la presentación
+[Lab 05 Security Findings](https://claude.ai/artifact/WLGF6m2HkUPVibvDW18HiH); solo
+la abre quien la tenga compartida. El detalle de cada hallazgo está en
 [`../REPORTE_HALLAZGOS.md`](../REPORTE_HALLAZGOS.md) y [`../SECURITY.md`](../SECURITY.md).
 
-| Bloque | Tiempo | Presenta |
-|---|---|---|
-| 1. Problema | 0:00 a 0:40 | |
-| 2. Impacto | 0:40 a 1:20 | |
-| 3. Evidencia | 1:20 a 2:20 | |
-| 4. Corrección, con demostración en vivo | 2:20 a 3:20 | |
-| 5. Nueva evidencia | 3:20 a 4:15 | |
-| 6. Limitaciones | 4:15 a 5:00 | |
+## Orden y tiempos
 
-## 1. Problema (40 s)
-**Qué decir:**
-- `memlab` es nuestro laboratorio de memoria de largo plazo para asistentes. Le
-  aplicamos el ciclo completo: SAST, secretos, dependencias, DAST, validación
-  manual, corrección y reescaneo.
-- El hallazgo que vamos a seguir: los scripts de `experiments/` armaban rutas con
-  argumentos de la línea de comandos sin validarlos.
+| # | Diapositiva | Qué responde | Tiempo | Presenta |
+|---|---|---|---|---|
+| 1 | Portada | Quiénes somos y qué vamos a mostrar | 10 s | |
+| 2 | Resumen | El hallazgo principal de cada análisis, con su criticidad y su estado | 25 s | |
+| 3 | SAST, qué encontramos y cómo | Qué y cómo | 50 s | |
+| 4 | SAST, corrección y validación | Cómo lo solucionamos y cómo lo validamos | 65 s | |
+| 5 | SCA | Las cuatro preguntas | 40 s | |
+| 6 | Detección de secretos | Las cuatro preguntas | 35 s | |
+| 7 | DAST | Las cuatro preguntas | 50 s | |
+| 8 | Lo que nos llevamos | Qué vieron y qué no vieron las herramientas | 25 s | |
 
-**Qué mostrar:** la [captura 06](evidencia/capturas/06-code-scanning-extended.webp),
-con las 9 alertas `py/path-injection` de CodeQL.
+En total son unos cinco minutos. SAST tiene dos diapositivas porque es el único
+análisis con el ciclo completo de corrección y reescaneo.
 
-## 2. Impacto (40 s)
-**Qué decir:**
-- De `evidence/` salen todas las métricas del proyecto. Con `../` o una ruta
-  absoluta se podía leer y escribir fuera de esa carpeta, y un perfil mal escrito
-  creaba carpetas y vaciaba `data/` antes de fallar.
-- El riesgo real es bajo, porque quien corre el script ya tiene esos permisos, pero
-  afecta la integridad de la evidencia.
-- Hay otros dos riesgos importantes: la clave HMAC de desarrollo fija en el código
-  (F-05, sigue abierta) y la API del modelo sin autenticación (F-10, validada).
+## Las cuatro preguntas, por análisis
 
-**Qué mostrar:** la tabla de hallazgos de la sección 3 de `SECURITY.md`.
+### SAST
+- **Qué:** 9 alertas `py/path-injection` de CodeQL (CWE-22, alta): 7 reales (F-07 y
+  F-08) y 2 falsos positivos. Semgrep dio 17 hallazgos: 11 reales (F-01 media, F-02 y
+  F-06 bajas) y 6 falsas alarmas en la carpeta del kit.
+- **Cómo:** Semgrep corre en cada PR con GitHub Actions, y CodeQL en Default setup.
+  Con la configuración por defecto CodeQL dio 0; con la suite `extended` y amenazas
+  `remote_and_local` aparecieron las 9.
+- **Solución:** `child_path()` y la validación del perfil en `new_run_dir()` (PR #6,
+  #7 y #8). La revisión de Codex encontró dos formas de saltar la corrección con
+  enlaces simbólicos (F-11), y también se corrigieron.
+- **Validación:** CodeQL pasó de 9 resultados a 0 con la misma versión. La prueba de
+  regresión pasó de 11 fallas en 13 casos a 17 de 17, y `make metrics` dio las mismas
+  métricas.
+- **Evidencia para mostrar:** la [captura 06](evidencia/capturas/06-code-scanning-extended.webp),
+  [`pytest-antes.txt`](evidencia/remediacion/pytest-antes.txt),
+  [`pytest-despues.txt`](evidencia/remediacion/pytest-despues.txt) y las alertas
+  cerradas en [code scanning](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/security/code-scanning?query=is%3Aclosed).
 
-## 3. Evidencia (1 min)
-**Qué decir:**
-- Con su configuración por defecto, CodeQL dio 0 alertas, porque `memlab` no recibe
-  entrada remota. Con la suite `extended` y amenazas locales dio 9: 7 reales y 2
-  falsos positivos.
-- Antes de corregir escribimos la prueba de regresión: sobre el código vulnerable
-  fallaban 11 de 13 casos.
-- Para el punto 6 validamos a mano la API del modelo, solo con peticiones de
-  lectura: responde sin credenciales, pero no es accesible desde la red y rechaza
-  con 403 los sitios ajenos.
+### SCA
+- **Qué:** 4 CVE de `chromadb` sin versión corregida (2 críticos y 2 altos) y 1 de
+  `pytest` (medio).
+- **Cómo:** `pip-audit` en Actions sobre las versiones mínimas y las últimas que
+  permite `pyproject.toml`, más las alertas de Dependabot. Las dos herramientas
+  coinciden aviso por aviso.
+- **Solución:** los de `chromadb` no aplican, porque son de su servidor HTTP y usamos
+  el cliente embebido, así que se descartaron como *not used*. Para `pytest`, la
+  propuesta es subir el piso a 9.0.3. El PR #2 de Dependabot se cerró sin fusionar.
+- **Validación:** las alertas quedaron cerradas en Dependabot con su justificación.
+- **Evidencia para mostrar:** las capturas [09](evidencia/capturas/09-dependabot-alertas.webp),
+  [10](evidencia/capturas/10-dependabot-chromadb-descartadas.webp) y
+  [11](evidencia/capturas/11-pr2-cerrado.webp).
 
-**Qué mostrar:**
-[`pytest-antes.txt`](evidencia/remediacion/pytest-antes.txt) y la tabla P1 a P5 de
-la sección 5 de `SECURITY.md`.
+### Detección de secretos
+- **Qué:** ningún secreto expuesto. En la revisión manual apareció F-05, una clave
+  HMAC de desarrollo fija en `src/memlab/config.py:37` (CWE-798, media).
+- **Cómo:** Gitleaks en cada PR sobre todo el historial, y la detección de secretos
+  de GitHub con push protection.
+- **Solución propuesta:** exigir `MEMLAB_HMAC_KEY` en las corridas oficiales y fallar
+  si falta.
+- **Validación:** pendiente, porque F-05 sigue abierto. Hay que decirlo así.
+- **Evidencia para mostrar:** el [run de Actions del PR #1](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/actions/runs/39690739269),
+  con Gitleaks en verde, y la [captura 03](evidencia/capturas/03-settings-ai-secret-protection.webp).
 
-## 4. Corrección (1 min, con demostración en vivo)
-**Qué decir:**
-- `child_path()` arma cada ruta dentro de su carpeta y rechaza `..`, rutas
-  absolutas, subcarpetas y enlaces simbólicos. `new_run_dir()` valida el perfil
-  antes de tocar el disco. No tocamos el código de `memlab` (`src/memlab`).
-- La revisión automática de código encontró dos veces que la corrección no cubría
-  los enlaces simbólicos. Las dos tienen su prueba y su corrección (F-11).
+### DAST
+- **Qué:** ZAP Baseline dio 0 fallas y 3 advertencias por encabezados (F-09, baja). La
+  validación manual confirmó que la API de Ollama no exige autenticación (F-10,
+  CWE-306, baja).
+- **Cómo:** no hay staging web, así que ZAP corrió en Docker contra la API de Ollama
+  en `localhost:11434`, la alternativa que permite el enunciado. F-10 se probó con
+  cinco peticiones de solo lectura.
+- **Solución:** se aceptan, porque la API solo escucha en `127.0.0.1` y rechaza con
+  403 los orígenes ajenos.
+- **Validación:** `validar-ollama.sh` termina con código 0 si todo sigue igual y con
+  código 1 si algo cambia.
+- **Evidencia para mostrar:** el [informe de ZAP](evidencia/zap-local/zap-report.html)
+  y la [salida de la validación](evidencia/validacion-manual/ollama-sin-autenticacion.txt).
 
-**Demostración en vivo:** los dos comandos de la sección siguiente.
-
-## 5. Nueva evidencia (55 s)
-**Qué decir:**
-- CodeQL, con la misma versión antes y después, pasó de 9 resultados a 0, y las 7
-  alertas quedaron como corregidas.
-- Semgrep dio 22 hallazgos antes y 22 después: la corrección no agrega nada.
-- La prueba de regresión pasa los 17 casos, y recalcular las métricas de todas las
-  corridas da exactamente lo mismo: la corrección no cambió resultados.
-
-**Qué mostrar:** la página de code scanning con las alertas cerradas, y los
-[PR #6](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/6)
-y [PR #7](https://github.com/Lanch3ros/fdsi-gp06-secure-conversational-memory-lab5/pull/7).
-
-## 6. Limitaciones (45 s)
-**Qué decir:**
-- No hay staging ni servicio web, así que el DAST fue local contra Ollama y solo
-  pudo revisar su portada.
-- Ninguna herramienta detectó la falla central del proyecto, la recuperación de
-  memorias de otros usuarios (la mide nuestro experimento T02), ni la clave HMAC
-  fija.
-- Siguen abiertos F-01, F-02, F-04, F-05 y F-06, y `main` no tiene protección de
-  rama: un check fallido no bloquea el merge.
-
-## Comandos de la demostración en vivo
+## Demostración en vivo, si sobra tiempo
 Desde la raíz del repositorio, con `make setup` ya hecho:
 
 ```bash
@@ -99,26 +99,28 @@ Resultado esperado: `17 passed`.
 ```
 
 Resultado esperado: `nombre no valido, sale de …/evidence/runs: '../fuera'`, con
-código de salida 1 y sin leer ni escribir nada fuera de `evidence/`.
+código de salida 1.
 
 ## Antes de presentar
-- Correr `make setup` y los dos comandos una vez, para no esperar en vivo.
-- Dejar abiertas la página de code scanning, los PR #6 y #7 y `SECURITY.md`.
+- Repartir las diapositivas en la columna «Presenta».
+- Compartir la presentación con el equipo y ensayarla una vez con cronómetro.
+- Correr una vez los dos comandos de la demostración.
+- Dejar abiertas las alertas cerradas de code scanning, los PR #6 y #7 y `SECURITY.md`.
 
 ## Preguntas probables
-- **¿Por qué no hay DAST contra un staging HTTPS?** `memlab` es una herramienta de
-  línea de comandos. El enunciado permite un baseline local con Docker, y se escaneó
-  la única superficie HTTP del sistema: la API de Ollama.
-- **¿Por qué no actualizaron `chromadb`?** Sus cuatro avisos no tienen versión
-  corregida y son del servidor HTTP de ChromaDB, que no usamos. Cambiar la versión,
-  además, alteraría las corridas oficiales del proyecto.
-- **¿Cómo saben que la corrección no cambió los resultados del proyecto?** No se
-  tocó `src/memlab`, y `make metrics` recalculó todas las corridas con resultados
-  idénticos a los versionados.
-- **¿Por qué F-05 sigue abierto si es de riesgo medio?** La corrección del punto 7
-  pedía una solución pequeña y rastreable, y elegimos la que tenía alertas de CodeQL
-  para reescanear. F-05 queda como la siguiente.
-- **¿Qué aprendieron de la revisión de código?** Que una corrección confirmada por
-  las herramientas puede tener huecos. La revisión automática hizo 5 observaciones
-  en los PR #4 a #7, todas válidas: dos sobre enlaces simbólicos, que el reescaneo
-  no veía, y tres sobre el script de validación.
+Las respuestas están en inglés, como la exposición.
+
+- **Why is there no DAST against an HTTPS staging site?** memlab is a command line
+  tool with no web service. The lab allows a local baseline with Docker, so we
+  scanned the only HTTP surface in the system, the Ollama API.
+- **Why did you not upgrade chromadb?** Its four CVEs have no fixed version and they
+  live in the ChromaDB HTTP server, which we do not use. Changing the version would
+  also alter the official experiment runs.
+- **How do you know the fix did not change your results?** We did not touch
+  src/memlab, and make metrics recomputed every run with identical results.
+- **Why is F-05 still open if it is rated medium?** Point 7 asked for one small fix
+  we could trace and rescan, and CodeQL could confirm the fix for F-07 and F-08. F-05
+  is the next one.
+- **What did the code review teach you?** A fix the tools confirm can still have
+  gaps. Codex raised 5 issues in our pull requests and all of them were valid, and
+  the rescan had missed the two about symbolic links.
